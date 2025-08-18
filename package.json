@@ -5,8 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-  "build": "vite build",
-  "build:single": "vite build && node scripts/inline-dist.js",
+    "build": "vite build && node scripts/inline-dist.js",
+    "build:raw": "vite build",
+    "build:single": "vite build && node scripts/inline-dist.js",
     "preview": "vite preview"
   },
   "dependencies": {

@@ -27,139 +27,167 @@ const styles = {
 export default function App() {
   // Language (TR/EN) simple toggle (no persistence)
   const [lang, setLang] = useState('tr');
+  
+  // --- Missing helpers & states reintroduced after refactor ---
+  // Identifier sanitizer for Java class/constant names
+  const sanitizeIdentifier = (name, fallback = 'Generated') => {
+    if(!name) return fallback;
+    const cleaned = name
+      .replace(/[^A-Za-z0-9_]/g, '')      // remove illegal chars
+      .replace(/^[^A-Za-z_]+/, '');        // ensure it doesn't start with digit
+    if(!cleaned) return fallback;
+    return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+  };
+
+  // Core builder state
+  const [elements, setElements] = useState([]); // {id, alias, by, selector, action}
+  const [generatedCodes, setGeneratedCodes] = useState([]); // {id, code, alias}
+  const [javaClassName, setJavaClassName] = useState('');
+  const [outputMode, setOutputMode] = useState(''); // 'gherkin' | 'grid'
+  const [globalPageName, setGlobalPageName] = useState('');
+  const [stepClassName, setStepClassName] = useState('');
+  // (Manual override flag no longer needed; auto-sync enabled)
+  const [userEditedStepName] = useState(false); // kept only to avoid wider removals
+  const [stepEntries, setStepEntries] = useState([]); // {id,pageName,action,element}
+  const [pageNameTouched, setPageNameTouched] = useState(false);
+  const [pageClassName, setPageClassName] = useState('');
+  const [pageClassCode, setPageClassCode] = useState('');
+  const [stepDefsCode, setStepDefsCode] = useState('');
+  const [dark, setDark] = useState(false);
+  const [toast, setToast] = useState(null); // {msg}
+  const [locked] = useState(false); // legacy lock flag (kept for minimal change)
+
+  // Toast helper
+  const showToast = (msg) => { setToast({msg}); setTimeout(()=>setToast(null), 2600); };
+
+  // Dış görünüm için element alias dönüştürücü: LOGIN_BUTTON -> loginButton
+  const friendlyElement = (raw) => {
+    if(!raw) return raw;
+    if(/^[A-Z0-9_]+$/.test(raw)) {
+      const parts = raw.toLowerCase().split('_').filter(Boolean);
+      if(!parts.length) return raw.toLowerCase();
+      return parts[0] + parts.slice(1).map(p=>p.charAt(0).toUpperCase()+p.slice(1)).join('');
+    }
+    return raw; // zaten normal yazılmış
+  };
+  // PascalCase versiyon: LOGIN_INPUT -> LoginInput (method isimleri için)
+  const aliasPascal = (raw) => {
+    if(!raw) return '';
+    const parts = raw.split(/[^a-zA-Z0-9]+/).filter(Boolean);
+    if(!parts.length) return '';
+    return parts.map(seg=>{
+      const lower = seg.toLowerCase();
+      return lower.charAt(0).toUpperCase()+lower.slice(1);
+    }).join('');
+  };
+
+  // İnsan okunur Title Case: loginButton -> Login Button, LoginPage -> Login Page, SEND_KEYS -> Send Keys
+  const humanizeWords = (raw) => {
+    if(!raw) return '';
+    return raw
+      .toString()
+      .replace(/[_-]+/g,' ')        // underscores/dashes
+      .replace(/([a-z0-9])([A-Z])/g,'$1 $2')
+      .replace(/([A-Z]+)([A-Z][a-z])/g,'$1 $2')
+      .replace(/\s+/g,' ')
+      .trim()
+      .split(' ')
+      .map(w=> w.charAt(0).toUpperCase()+w.slice(1).toLowerCase())
+      .join(' ');
+  };
+
+  // Element helpers
+  const addElement = () => setElements(prev => [...prev, { id: uuid(), alias:'', by:'', selector:'', action:'' }]);
+  const updateElement = (id, patch) => setElements(prev => prev.map(el => el.id === id ? { ...el, ...patch } : el));
+  const removeElement = (id) => {
+    setElements(prev => prev.filter(el => el.id !== id));
+    setGeneratedCodes(prev => prev.filter(c => c.id !== id));
+  };
+  const generateCodeFor = (id) => {
+    const el = elements.find(e => e.id === id);
+    if(!el) return;
+    if(!(el.alias.trim() && el.selector.trim() && el.by.trim())) return;
+    const constName = el.alias.trim()
+      .replace(/[^A-Za-z0-9]+/g,'_')
+      .replace(/^_|_$/g,'')
+      .toUpperCase();
+    const locatorExpr = (()=>{
+      const s = el.selector.trim();
+      const by = el.by.trim();
+      if(by === 'id') return `By.id("${s}")`;
+      if(by === 'css') return `By.cssSelector("${s}")`;
+      if(by === 'xpath') return `By.xpath("${s}")`;
+      if(by === 'name') return `By.name("${s}")`;
+      if(by === 'class') return `By.className("${s}")`;
+      if(by === 'tag') return `By.tagName("${s}")`;
+      if(by === 'linkText') return `By.linkText("${s}")`;
+      if(by === 'partialLinkText') return `By.partialLinkText("${s}")`;
+      return `/* Unsupported locator */`;
+    })();
+    const codeLine = `public static final By ${constName} = ${locatorExpr};`;
+    setGeneratedCodes(prev => {
+      // replace if already exists for this element
+      const existing = prev.find(c => c.id === id);
+      if(existing) return prev.map(c => c.id === id ? { ...c, code: codeLine } : c);
+      return [...prev, { id, code: codeLine, alias: el.alias.trim() }];
+    });
+    showToast('By üretildi');
+  };
+  const clearGenerated = () => { setGeneratedCodes([]); showToast(t('toastModelCleared')); };
+
+  // Step entry helpers (manual editing still partly present in UI)
+  const updateStepEntry = (id, patch) => setStepEntries(prev => prev.map(se => se.id === id ? { ...se, ...patch } : se));
+  const removeStepEntry = (id) => setStepEntries(prev => prev.filter(se => se.id !== id));
   const dict = {
     tr: {
       // Toasts
-      toastModelCleared:'Model temizlendi', toastStepsGenerated:'Steps üretildi', toastStepsCleared:'Steps temizlendi', toastPageCleared:'Page temizlendi', toastZip:'ZIP indirildi', toastReset:'Sıfırlandı',
+  toastModelCleared:'Model temizlendi', toastStepsGenerated:'Steps üretildi', toastStepsCleared:'Steps temizlendi', toastPageCleared:'Page temizlendi', toastZip:'ZIP indirildi', toastReset:'Sıfırlandı',
+  noteGeneratedFromElements:'Step ve Page class\'ları aşağıdaki Elements listesinden türetilir.',
       // Global buttons
       zip:'ZIP İndir', reset:'Reset',
       // Section 1
-      elements:'Elements', elementFormat1:'Element Formatı: Element Adı, Locator Türü, Locator', elementFormat2:"Element ekleyip Üret'e basın.", addElement:'Element ekle', generate:'Üret', delete:'Sil',
+  section1Title:'Model, Steps, Page Steps & Element Tanımları',
+  elements:'Elements', addElement:'Element ekle', generate:'Üret', delete:'Sil',
+    elementGuideTitle:'Nasıl Kullanılır?', elementGuide1:'1) Element Adı: İşlem yapılacak bileşen (LOGIN_BUTTON, email field vb.).', elementGuide2:'2) Locator Türü seçin ve Locator değerini girin.', elementGuide3:'3) Action seçin (Click, Send Keys, Check, Set Saved, Get Saved ...).', elementGuide4:"4) Üret'e basarak locator sabitini model sınıfına ekleyin.", elementGuide5:"5) Tüm elementleri ekleyince 'Stepleri Elemanlardan Üret' ile Step & Page class'larını oluşturun.", elementGuide6:"Not: 'Set Saved' texti ScenarioContext'e yazar, 'Get Saved' aynı anahtarı okuyup Send Keys yapar.",
       // Section 2
-      stepSection:'2. Java Step & Page Class Ayarları', stepDefsSettings:'Java Step Definitions Ayarları', steps:'Steps', stepFormat1:'Step Formatı: Page Name, Action, Element Adı', stepFormat2:"Step ekleyip Üret'e basın.", addStep:'Step ekle', ready:'Hazır', pageClass:'Page Class', previews:'Önizlemeler', pageClassInfo1:'Page Class adı Step Class adından türetilir:', pageClassInfo2:'Step sınıfı üretildiğinde Page Class otomatik güncellenir.', needMode:'Not: Bu alanı kullanmadan önce üstteki Mode seçimini yapmalısınız.'
+  stepDefsSettings:'Java Step Definitions Ayarları', steps:'Steps', pageClass:'Page Class', previews:'Önizlemeler'
     },
     en: {
-      toastModelCleared:'Model cleared', toastStepsGenerated:'Steps generated', toastStepsCleared:'Steps cleared', toastPageCleared:'Page cleared', toastZip:'ZIP downloaded', toastReset:'Reset done',
+  toastModelCleared:'Model cleared', toastStepsGenerated:'Steps generated', toastStepsCleared:'Steps cleared', toastPageCleared:'Page cleared', toastZip:'ZIP downloaded', toastReset:'Reset done',
+  noteGeneratedFromElements:'Step & Page classes are generated from the Elements list below.',
       zip:'Download ZIP', reset:'Reset',
-      elements:'Elements', elementFormat1:'Element Format: Element Name, Locator Type, Locator', elementFormat2:'Add element then press Generate.', addElement:'Add element', generate:'Generate', delete:'Delete',
-      stepSection:'2. Java Step & Page Class Settings', stepDefsSettings:'Java Step Definitions Settings', steps:'Steps', stepFormat1:'Step Format: Page Name, Action, Element Name', stepFormat2:'Add step then press Generate.', addStep:'Add step', ready:'Ready', pageClass:'Page Class', previews:'Previews', pageClassInfo1:'Page Class name derives from Step Class:', pageClassInfo2:'When Step class is generated Page Class updates automatically.', needMode:'Note: Select Mode above before using this area.'
+  section1Title:'Model, Steps & Elements',
+  elements:'Elements', addElement:'Add element', generate:'Generate', delete:'Delete',
+    elementGuideTitle:'How to Use', elementGuide1:'1) Element Name: component you will interact with (LOGIN_BUTTON, email field, etc.).', elementGuide2:'2) Select Locator Type and enter Locator value.', elementGuide3:'3) Choose Action (Click, Send Keys, Check, Set Saved, Get Saved ...).', elementGuide4:'4) Press Generate to add the locator constant to the model.', elementGuide5:"5) After adding all, click 'Stepleri Elemanlardan Üret' to build Step & Page classes.", elementGuide6:"Note: 'Set Saved' stores text in ScenarioContext, 'Get Saved' reads and sends it.",
+  stepDefsSettings:'Java Step Definitions Settings', steps:'Steps', pageClass:'Page Class', previews:'Previews'
     }
   };
   const t = (k) => dict[lang][k] || k;
   const toggleLang = () => setLang(l=> l==='tr' ? 'en' : 'tr');
   // Tema (varsayılan light, persistence yok)
-  const [dark, setDark] = useState(false);
-  useEffect(()=>{
-    const root = document.documentElement;
-    if (dark) root.classList.add('dark'); else root.classList.remove('dark');
-  },[dark]);
-
-  // Tüm localStorage kalıntılarını ilk yüklemede temizle (legacy verileri sil)
-  useEffect(()=>{
-    const legacyKeys = [
-      'csb.dark','csb.elements','csb.mode','csb.codes','csb.javaClassName',
-      'csb.stepClassName','csb.stepEntries','csb.pageClassName','csb.pageClassCode','csb.stepDefsCode'
-    ];
-    legacyKeys.forEach(k=>{ try { localStorage.removeItem(k); } catch{} });
-  },[]);
-
-  // State'ler (temiz başlangıç)
-  const [elements, setElements] = useState([]);
-  const [outputMode, setOutputMode] = useState(""); // kullanıcı seçene kadar boş
-  const [pageNameTouched, setPageNameTouched] = useState(false);
-  const locked = !outputMode;
-  const [generatedCodes, setGeneratedCodes] = useState([]);
-  const [javaClassName, setJavaClassName] = useState("");
-  const [stepClassName, setStepClassName] = useState("");
-  const newStepEntry = () => ({ id: uuid(), pageName: "", action: "", element: "" });
-  const [stepEntries, setStepEntries] = useState([]);
-  const [pageClassName, setPageClassName] = useState("");
-  const [pageClassCode, setPageClassCode] = useState("");
-  const [stepDefsCode, setStepDefsCode] = useState("");
-  const [toast, setToast] = useState(null); // {msg,id}
-  const showToast = (msg) => {
-    const id = Date.now();
-    setToast({ msg, id });
-    setTimeout(()=>{
-      setToast(t=> t && t.id===id ? null : t);
-    },2200);
-  };
-
-  // CRUD helpers
-  const addElement = () => setElements((els) => [...els, { id: uuid(), alias: "", by: "", selector: "" }]);
-  const removeElement = (id) => {
-    setElements((els) => els.filter((e) => e.id !== id));
-    setGeneratedCodes(list => list.filter(c => c.id !== id));
-  };
-  const updateElement = (id, patch) => setElements((els) => els.map((e) => (e.id === id ? { ...e, ...patch } : e)));
-  const addStepEntry = () => setStepEntries(list => [...list, newStepEntry()]);
-  const updateStepEntry = (id, patch) => setStepEntries(list => list.map(s => s.id === id ? { ...s, ...patch } : s));
-  const removeStepEntry = (id) => setStepEntries(list => list.filter(s => s.id !== id));
-
-  // Removed old scenario builder state (steps, output)
-
-  // (old non-persist state declarations removed)
-
-  const aliasToConst = (alias) => {
-    if (!alias) return "UNNAMED";
-    // Türkçe karakterleri sadeleştir (basit mapping)
-    const map = { ç: 'c', ğ: 'g', ı: 'i', ö: 'o', ş: 's', ü: 'u', Ç: 'C', Ğ: 'G', İ: 'I', Ö: 'O', Ş: 'S', Ü: 'U' };
-    const normalized = alias.replace(/[çğışöüÇĞİÖŞÜ]/g, ch => map[ch] || ch);
-    const parts = normalized
-      .trim()
-      .replace(/[^a-zA-Z0-9]+/g, ' ')
-      .split(' ')
-      .filter(Boolean)
-      .map(p => p.toUpperCase());
-    let name = parts.join('_');
-    if (/^[0-9]/.test(name)) name = 'E_' + name;
-    return name || 'UNNAMED';
-  };
-
-  const buildByCode = (el) => {
-    const constName = aliasToConst(el.alias);
-    const sel = el.selector;
-    let locator;
-    switch (el.by) {
-      case 'id': locator = `By.id("${sel}")`; break;
-      case 'css': locator = `By.cssSelector("${sel}")`; break;
-      case 'xpath': locator = `By.xpath("${sel}")`; break;
-      case 'name': locator = `By.name("${sel}")`; break;
-      case 'class': locator = `By.className("${sel}")`; break;
-      case 'tag': locator = `By.tagName("${sel}")`; break;
-      case 'linkText': locator = `By.linkText("${sel}")`; break;
-      case 'partialLinkText': locator = `By.partialLinkText("${sel}")`; break;
-      default: locator = `By.xpath("${sel}")`; // fallback
-    }
-    return `public static final By ${constName} = ${locator};`;
-  };
-
-  const generateCodeFor = (elId) => {
-    const el = elements.find(e => e.id === elId);
-    if (!el || !el.alias || !el.selector || !el.by) return;
-    const code = buildByCode(el);
-    setGeneratedCodes(prev => {
-      const idx = prev.findIndex(p => p.id === elId);
-      if (idx >= 0) {
-        const copy = [...prev];
-        copy[idx] = { id: elId, code };
-        return copy;
-      }
-      return [...prev, { id: elId, code }];
-    });
-  };
-
-  const clearGenerated = () => { setGeneratedCodes([]); showToast(t('toastModelCleared')); };
-
-  const sanitizeIdentifier = (name, fallback) => {
-    if (!name) return fallback;
-    let clean = name.replace(/[^A-Za-z0-9_]/g, "");
-    if (!/^[A-Za-z_]/.test(clean)) clean = "C" + clean;
-    return clean || fallback;
-  };
 
   const classNameSafe = sanitizeIdentifier(javaClassName, "GeneratedModel");
   const packageSafe = "models"; // sabit paket adı
+
+  // Derive base name from model class for Steps/Page (strip trailing 'Model' or 'Models')
+  const deriveBaseFromModel = (name) => {
+    if(!name) return 'Generated';
+    const raw = name.trim();
+    const stripped = raw.replace(/Models?$/i,'');
+    return stripped || raw;
+  };
+
+  // Auto derive step & page class names LIVE while typing model name (always in sync)
+  useEffect(()=>{
+    const name = javaClassName.trim();
+    if(!name) { setStepClassName(''); setGlobalPageName(''); return; }
+    const base = deriveBaseFromModel(name);
+    const step = sanitizeIdentifier(base + 'Steps','GeneratedSteps');
+    // Yeni kural: Global Page Name da identifier formatında: <Base>Page
+    const globalPage = sanitizeIdentifier(base + 'Page','GeneratedPage');
+    if(stepClassName !== step) setStepClassName(step);
+    if(globalPageName !== globalPage) setGlobalPageName(globalPage);
+  },[javaClassName]);
 
   const fullJavaFile = useMemo(() => {
     if (!generatedCodes.length) return "";
@@ -172,6 +200,7 @@ export default function App() {
 
   // Step Definitions output generation
   const generateStepDefs = () => {
+  try {
     const pascal = (s) => s.split(/[^a-zA-Z0-9]+/).filter(Boolean).map(p=>p.charAt(0).toUpperCase()+p.slice(1)).join("");
     const camel = (s) => { const p = pascal(s); return p ? p.charAt(0).toLowerCase()+p.slice(1) : p; };
     const actionKey = (a) => {
@@ -179,7 +208,11 @@ export default function App() {
       if (k === 'click') return 'click';
       if (k === 'send keys') return 'sendKeys';
       if (k === 'check text') return 'checkText';
-      if (k === 'should see' || k === 'check') return 'shouldSee';
+      if (k === 'should see') return 'shouldSee';
+      if (k === 'check') return 'checkText'; // unify plain Check into checkText pattern
+      if (k === 'set saved') return 'setSaved';
+      if (k === 'get saved') return 'getSaved';
+      if (k === 'save') return 'save';
       return pascal(a.charAt(0).toUpperCase()+a.slice(1));
     };
     const pageClsName = (()=>{
@@ -191,42 +224,65 @@ export default function App() {
       return 'GeneratedPage';
     })();
     const pageVarName = pageClsName.replace(/[^A-Za-z0-9]/g,'').toLowerCase();
-    const methods = stepEntries
+  const methods = stepEntries
       .filter(e => e.pageName.trim() && e.action.trim() && e.element.trim())
       .map(e => {
-        const pageNameRaw = e.pageName.trim();
-        const actionRaw = e.action.trim();
-        const elementRaw = e.element.trim();
-        const elementPascal = pascal(elementRaw);
+  const pageNameRaw = e.pageName.trim();
+  const actionRaw = e.action.trim();
+  const elementRaw = e.element.trim();
+  const elementDisplay = friendlyElement(elementRaw);
+  const elementPascal = aliasPascal(elementRaw);
         const annotationType = /should|check/i.test(actionRaw) ? 'Then' : 'When';
         // Mode'a göre annotation içeriği
         let inner;
         if (outputMode === 'grid') {
-          inner = `${pageNameRaw}, ${actionRaw}, ${elementRaw}`;
+      inner = `${humanizeWords(pageNameRaw)}, ${humanizeWords(actionRaw)}, ${humanizeWords(elementDisplay)}`;
         } else { // gherkin
           const actLower = actionRaw.toLowerCase();
             if (actLower === 'should see' || actLower === 'check') {
-              inner = `I should see ${elementRaw} on ${pageNameRaw}`;
+        inner = `I should see ${elementDisplay} on ${pageNameRaw}`;
             } else if (actLower === 'check text') {
-              inner = `I should see text of ${elementRaw} on ${pageNameRaw}`;
+        inner = `I should see text of ${elementDisplay} on ${pageNameRaw}`;
             } else if (actLower === 'send keys') {
-              inner = `I fill ${elementRaw} on ${pageNameRaw} with "<text>"`;
+        inner = `I fill ${elementDisplay} on ${pageNameRaw} with "<text>"`;
             } else if (actLower === 'click') {
-              inner = `I click ${elementRaw} on ${pageNameRaw}`;
+        inner = `I click ${elementDisplay} on ${pageNameRaw}`;
+            } else if (actLower === 'save') {
+        inner = `I save ${elementDisplay} on ${pageNameRaw}`;
             } else {
-              inner = `I ${actionRaw} ${elementRaw} on ${pageNameRaw}`;
+        inner = `I ${actionRaw} ${elementDisplay} on ${pageNameRaw}`;
             }
+        }
+        const isGetSaved = /get saved/i.test(actionRaw);
+        const isSetSaved = /set saved/i.test(actionRaw);
+        const needsParam = /send keys|check text|check/i.test(actionRaw) && !isGetSaved;
+        if(outputMode === 'grid') {
+          if(needsParam) inner = inner + ': {string}';
+          if(isGetSaved) { // annotation 'Get Saved' yerine 'Send Keys'
+            inner = inner.replace(/Get Saved/i,'Send Keys');
+          }
         }
         const annotation = `@${annotationType}("${inner}")`;
         // New naming pattern: pageName + action + element in camelCase
         const pagePascal = pascal(pageNameRaw);
-        const actionPascal = pascal(actionRaw);
+        const normalizedActionForName = isGetSaved ? 'Send Keys' : actionRaw; // get saved görünürde send keys gibi
+        const actionPascal = pascal(normalizedActionForName);
         const methodName = camel(pagePascal + actionPascal + elementPascal);
-    const pageMethodBase = actionKey(actionRaw) + elementPascal;
-    const needsParam = /send keys|check text/i.test(actionRaw);
-    const callArgs = needsParam ? '/* text */' : '';
-    const body = `        ${pageVarName}.${pageMethodBase}(${callArgs});`;
-        return `    ${annotation}\n    public void ${methodName}() {\n${body}\n    }`;
+    const resolvedActionKey = actionKey(actionRaw);
+    const pageMethodBase = resolvedActionKey + elementPascal;
+    let body;
+    let signature;
+    if(isGetSaved) {
+      const varName = friendlyElement(elementRaw) || 'value';
+      const key = elementRaw.replace(/[^A-Za-z0-9]+/g,'_').replace(/^_|_$/g,'').toUpperCase();
+      body = `        String ${varName} = ScenarioContext.get(\"${key}\", String.class);\n        ${pageVarName}.sendKeys${elementPascal}(${varName});`;
+      signature = `public void ${methodName}()`;
+    } else {
+      const callArgs = needsParam ? 'text' : '';
+      body = `        ${pageVarName}.${pageMethodBase}(${callArgs});`;
+      signature = needsParam ? `public void ${methodName}(String text)` : `public void ${methodName}()`;
+    }
+        return `    ${annotation}\n    ${signature} {\n${body}\n    }`;
       });
     if (!methods.length) { setStepDefsCode(""); return; }
   const header = `    ${pageClsName} ${pageVarName};\n\n    public ${stepClassName}() {\n        ${pageVarName} = new ${pageClsName}(DriverFactory.getDriver());\n    }\n\n`;
@@ -234,6 +290,10 @@ export default function App() {
     setStepDefsCode(cls);
   showToast(t('toastStepsGenerated'));
     generatePageClass();
+    } catch(err) {
+      console.error('[generateStepDefs] hata:', err);
+      showToast('Step üretim hatası (console)');
+    }
   };
   const clearStepDefs = () => { setStepDefsCode(""); showToast(t('toastStepsCleared')); };
 
@@ -262,25 +322,35 @@ export default function App() {
       if (k === 'click') return 'click';
       if (k === 'send keys') return 'sendKeys';
       if (k === 'check text') return 'checkText';
-      if (k === 'should see' || k === 'check') return 'shouldSee';
+      if (k === 'should see') return 'shouldSee';
+      if (k === 'check') return 'checkText'; // unify
+      if (k === 'set saved') return 'setSaved';
+      if (k === 'get saved') return 'getSaved';
+      if (k === 'save') return 'save';
       return k.replace(/\s+/g,'');
     };
-    const helperCall = (act) => {
-      if (act === 'click') return 'helper.click(/* TODO: locator constant */);';
-      if (act === 'sendKeys') return 'helper.sendKeys(/* TODO: locator constant */, /* text */);';
-      if (act === 'checkText') return 'helper.checkText(/* TODO: locator constant */, /* expected */);';
-      if (act === 'shouldSee') return 'helper.findElement(/* TODO: locator constant */);';
+    const helperCall = (act, constName) => {
+      if (act === 'click') return `helper.click(${constName});`;
+      if (act === 'sendKeys') return `helper.sendKeys(${constName}, text);`;
+      if (act === 'checkText') return `helper.checkText(${constName}, text);`;
+      if (act === 'shouldSee') return `helper.findElement(${constName});`;
+      if (act === 'setSaved') return `helper.findElement(${constName});\n        String value = helper.getText(${constName});\n        ScenarioContext.set("${constName.split('.').pop()}", value);`;
+      if (act === 'getSaved') return `String value = ScenarioContext.get("${constName.split('.').pop()}", String.class);\n        helper.sendKeys(${constName}, value);`;
+      if (act === 'save') return `helper.save(${constName});`;
       return '// TODO: implement';
     };
     const unique = new Map();
     stepEntries.filter(e=>e.action.trim() && e.element.trim()).forEach(e=>{
       const actionNorm = normalizeAction(e.action.trim());
-      const elementPascal = pascal(e.element.trim());
-      const methodName = `${actionNorm}${elementPascal}`; // clickCountryCode
+      const elementRaw = e.element.trim();
+      const elementPascal = aliasPascal(elementRaw);
+      const constName = `${classNameSafe}.` + elementRaw.replace(/[^A-Za-z0-9]+/g,'_').replace(/^_|_$/g,'').toUpperCase();
+      const methodName = `${actionNorm}${elementPascal}`; // e.g. checkTextCountryCode
       if (unique.has(methodName)) return;
-      const needsParam = /send keys|check text/i.test(e.action);
+      const needsParam = /send keys|check text|check/i.test(e.action);
       const signature = needsParam ? `public void ${methodName}(String text)` : `public void ${methodName}()`;
-      unique.set(methodName, `    ${signature} {\n        ${helperCall(actionNorm)}\n    }`);
+  const body = helperCall(actionNorm, constName);
+  unique.set(methodName, `    ${signature} {\n        ${body}\n    }`);
     });
     if (!unique.size) { setPageClassCode(""); return; }
     const cls = `public class ${clsName} {\n\n${[...unique.values()].join("\n\n")}\n}\n`;
@@ -356,6 +426,27 @@ export default function App() {
     }
   },[outputMode]);
 
+  const buildStepsFromElements = () => {
+    try {
+      if (!outputMode) { showToast('Önce Mode seçin'); return; }
+      if (!globalPageName.trim()) { showToast('Global Page Name zorunlu'); return; }
+      if (!stepClassName.trim()) { showToast('Step Class Name zorunlu'); return; }
+      const newSteps = [];
+      elements.forEach(el => {
+        if (el.alias.trim() && el.action && el.action.trim()) {
+          newSteps.push({ id: uuid(), pageName: globalPageName.trim(), action: el.action.trim(), element: el.alias.trim() });
+        }
+      });
+      console.log('[buildStepsFromElements] stepsCount=', newSteps.length, {outputMode, globalPageName, stepClassName});
+      setStepEntries(newSteps);
+      setTimeout(()=>generateStepDefs(), 0);
+    } catch(err) {
+      console.error('[buildStepsFromElements] hata:', err);
+      showToast('Elemandan step üretim hatası (console)');
+    }
+  };
+
+
   const handleResetAll = () => {
     setElements([]);
     setGeneratedCodes([]);
@@ -367,6 +458,7 @@ export default function App() {
     setPageClassName("");
     setPageClassCode("");
     setStepDefsCode("");
+    setGlobalPageName("");
   showToast(t('toastReset'));
   };
 
@@ -380,28 +472,29 @@ export default function App() {
       const page = s.pageName.trim();
       const action = s.action.trim();
       const element = s.element.trim();
+      const elementDisp = friendlyElement(element);
       if (outputMode === 'grid') {
-        return [page, action || '<action>', element || '<element>'].join(', ');
+        return [page, action || '<action>', elementDisp || '<element>'].join(', ');
       }
       // Gherkin modu - eksik parçalar için placeholder
       if(!action && !element) return `When <action> <element> on ${page}`;
       const actLower = action.toLowerCase();
       if(actLower === 'should see' || actLower === 'check') {
-        return `Then I should see ${element || '<element>'} on ${page}`;
+        return `Then I should see ${elementDisp || '<element>'} on ${page}`;
       }
       if(actLower === 'check text') {
-        return `Then I should see text of ${element || '<element>'} on ${page}`;
+        return `Then I should see text of ${elementDisp || '<element>'} on ${page}`;
       }
       if(actLower === 'send keys') {
-        return `When I fill ${element || '<element>'} on ${page} with "..."`;
+        return `When I fill ${elementDisp || '<element>'} on ${page} with "..."`;
       }
       if(actLower === 'click') {
-        return `When I click ${element || '<element>'} on ${page}`;
+        return `When I click ${elementDisp || '<element>'} on ${page}`;
       }
       if(action) {
-        return `When I ${action} ${element || '<element>'} on ${page}`;
+        return `When I ${action} ${elementDisp || '<element>'} on ${page}`;
       }
-      return `When <action> ${element || '<element>'} on ${page}`;
+      return `When <action> ${elementDisp || '<element>'} on ${page}`;
     };
     return withPage.map(lineFor).join('\n');
   },[stepEntries, outputMode]);
@@ -432,8 +525,8 @@ export default function App() {
       </div>
 
   <section className={`rounded-2xl border p-4 shadow-md backdrop-blur-sm transition hover:shadow-lg ${dark? 'border-slate-700 bg-slate-800/60':'bg-white/90'}`}>
-        <div className={`mb-4 flex items-center justify-between border-b pb-2 ${dark? 'border-slate-600':''}`}>          
-          <div className={`text-sm font-semibold tracking-wide ${dark? 'text-slate-200':'text-slate-700'}`}>1. Java Model & Elements</div>
+  <div className={`mb-4 flex items-center justify-between border-b pb-2 ${dark? 'border-slate-600':''}`}>          
+          <div className={`text-sm font-semibold tracking-wide ${dark? 'text-slate-200':'text-slate-700'}`}>{t('section1Title')}</div>
           <div className="flex items-center gap-2">
             <label className="text-[10px] font-medium text-gray-500">Mode</label>
             <select
@@ -448,26 +541,61 @@ export default function App() {
           </div>
         </div>
   <div className={`rounded-xl border p-5 shadow-inner ${dark? 'border-slate-700 bg-slate-900/40':'bg-white/60'}`}>        
+          <div className={`mb-4 rounded-md border px-3 py-2 text-[11px] font-semibold tracking-wide 
+            ${dark? 'bg-amber-400/15 border-amber-300/30 text-amber-200':'bg-amber-50 border-amber-300 text-amber-800'}
+          `}>
+            {t('noteGeneratedFromElements')}
+          </div>
           <div className="mb-4">
             <div className={`mb-2 text-xs font-semibold uppercase tracking-wide ${dark? 'text-indigo-300':'text-indigo-600'}`}>Java Model Ayarları</div>
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <div className="md:col-span-2">
-                <label className={`mb-1 block text-[11px] font-semibold uppercase tracking-wide ${dark? 'text-gray-300':'text-gray-600'}`}>Class Name</label>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+              {/* MODEL NAME */}
+              <div className="md:col-span-1">
+                <label className={`mb-1 block text-[11px] font-semibold uppercase tracking-wide ${dark? 'text-gray-300':'text-gray-600'}`}>MODEL NAME</label>
                 <input
                   className={styles.input + ` font-mono ${dark? 'bg-slate-700 border-slate-500 text-slate-100 placeholder-slate-400':''}`}
-                  placeholder="SeatSelectionModel"
+                  placeholder="LoginModel"
                   value={javaClassName}
                   onChange={(e) => setJavaClassName(e.target.value)}
                 />
   <div className={`mt-1 text-[11px] ${invalidJavaClass? 'text-red-500':'text-gray-500'} ${dark? '!text-gray-400':''}`}>{invalidJavaClass? 'Geçersiz sınıf adı (Büyük harfle başlamalı, sadece harf/rakam/_ )' : 'Sınıf adını düzenleyin.'}</div>
+              </div>
+              {/* STEP CLASS NAME */}
+              <div className="md:col-span-1">
+                <label className={`mb-1 block text-[11px] font-semibold uppercase tracking-wide ${dark? 'text-gray-300':'text-gray-600'}`}>STEP CLASS NAME</label>
+                <input
+                  className={styles.input + ` font-mono ${dark? 'bg-slate-700 border-slate-500 text-slate-100 placeholder-slate-400':''}`}
+                  placeholder="LoginSteps"
+                  value={stepClassName}
+                  onChange={(e)=>{ setStepClassName(e.target.value); }}
+                />
+                <div className={`mt-1 text-[10px] text-gray-500 ${dark? '!text-gray-400':''}`}>Element -&gt; Steps Sayfası Üretiminde Kullanılacak.</div>
+              </div>
+              {/* PAGE STEPS NAME (previously Global Page Name) */}
+              <div className="md:col-span-1">
+                <label className={`mb-1 block text-[11px] font-semibold uppercase tracking-wide ${dark? 'text-gray-300':'text-gray-600'}`}>PAGE STEPS NAME</label>
+                <input
+                  className={styles.input + ` font-mono ${dark? 'bg-slate-700 border-slate-500 text-slate-100 placeholder-slate-400':''}`}
+                  placeholder="LoginPage"
+                  value={globalPageName}
+                  onChange={(e)=>setGlobalPageName(e.target.value)}
+                />
+                <div className={`mt-1 text-[10px] text-gray-500 ${dark? '!text-gray-400':''}`}>Element -&gt; Page Steps Sayfası Üretiminde Kullanılacak.</div>
               </div>
             </div>
       {/* helper text moved directly under input above */}
           </div>
           <div className={`mb-2 text-xs font-semibold uppercase tracking-wide ${dark? 'text-indigo-300':'text-indigo-600'}`}>{t('elements')}</div>
           <div className="mb-3">
-            <div className={`text-xs ${dark? 'text-gray-300':'text-gray-600'}`}>{t('elementFormat1')}</div>
-            <div className={`text-xs ${dark? 'text-gray-500':'text-gray-400'}`}>{t('elementFormat2')}</div>
+            <div className={`mb-1 text-[11px] font-semibold uppercase tracking-wide ${dark? 'text-indigo-300':'text-indigo-600'}`}>{t('elementGuideTitle')}</div>
+            <ul className="list-disc pl-5 space-y-0.5 text-[11px] leading-snug">
+              <li className={`${dark? 'text-gray-300':'text-gray-700'}`}>{t('elementGuide1')}</li>
+              <li className={`${dark? 'text-gray-300':'text-gray-700'}`}>{t('elementGuide2')}</li>
+              <li className={`${dark? 'text-gray-300':'text-gray-700'}`}>{t('elementGuide3')}</li>
+              <li className={`${dark? 'text-gray-300':'text-gray-700'}`}>{t('elementGuide4')}</li>
+              <li className={`${dark? 'text-gray-300':'text-gray-700'}`}>{t('elementGuide5')}</li>
+              <li className={`${dark? 'text-amber-600':'text-amber-700'} dark:text-amber-300`}>{t('elementGuide6')}</li>
+            </ul>
           </div>
           <div className="space-y-2">
             {elements.map((el) => {
@@ -501,7 +629,7 @@ export default function App() {
                       <option value="partialLinkText">partialLinkText</option>
                     </select>
                   </div>
-                  <div className="col-span-5">
+                  <div className="col-span-3">
                     <label className={`mb-1 block text-[10px] font-semibold uppercase tracking-wide ${dark? 'text-gray-300':'text-gray-600'}`}>Locator</label>
                     <input
                       className={styles.input + ` font-mono ${dark? 'bg-slate-700 border-slate-500 text-slate-100 placeholder-slate-400':''}`}
@@ -509,6 +637,22 @@ export default function App() {
                       value={el.selector}
                       onChange={(e) => updateElement(el.id, { selector: e.target.value })}
                     />
+                  </div>
+                  <div className="col-span-2">
+                    <label className={`mb-1 block text-[10px] font-semibold uppercase tracking-wide ${dark? 'text-gray-300':'text-gray-600'}`}>Action</label>
+                    <select
+                      className={styles.select + (dark? ' bg-slate-700 border-slate-500 text-slate-100':'') }
+                      value={el.action}
+                      onChange={(e)=>updateElement(el.id,{ action: e.target.value })}
+                    >
+                      <option value="" disabled>Seçiniz</option>
+                      <option value="click">Click</option>
+                      <option value="send keys">Send Keys</option>
+                      <option value="check">Check</option>
+                      <option value="should see">Should See</option>
+                      <option value="set saved">Set Saved</option>
+                      <option value="get saved">Get Saved</option>
+                    </select>
                   </div>
                   <div className="col-span-1 text-center">
                     <button
@@ -531,6 +675,7 @@ export default function App() {
           </div>
           <div className="mt-3 mb-4 flex flex-wrap items-center gap-2">
             <button onClick={addElement} className={styles.primaryBtn}>{t('addElement')}</button>
+            <button onClick={buildStepsFromElements} className={styles.secondaryBtn} title="Seçilen action'a göre sadece Step & Page üret (model kodu varsa)" >Stepleri Elemanlardan Üret</button>
           </div>
           {generatedCodes.length > 0 && (
             <div className="relative mt-4">
@@ -552,108 +697,34 @@ export default function App() {
               </div>
             </div>
           )}
-        </div>
-      </section>
 
-  <section className={`rounded-2xl border p-4 shadow-md backdrop-blur-sm transition hover:shadow-lg ${dark? 'border-slate-700 bg-slate-800/60':'bg-white/90'}`}>
-  <div className={`mb-2 text-sm font-semibold tracking-wide ${dark? 'text-slate-200':'text-slate-700'}`}>{t('stepSection')}</div>
-        {locked && (
-          <div className="mb-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] font-medium text-amber-700">
-            {t('needMode')}
-          </div>
-        )}
-  <div className={`rounded-xl border p-5 space-y-6 shadow-inner ${dark? 'border-slate-700 bg-slate-900/40':'bg-white/60'}`}>
-          <div className="mb-4">
-            <div className={`mb-2 text-xs font-semibold uppercase tracking-wide ${dark? 'text-indigo-300':'text-indigo-600'}`}>{t('stepDefsSettings')}</div>
-            <label className={`mb-1 block text-[11px] font-semibold uppercase tracking-wide ${dark? 'text-gray-300':'text-gray-600'}`}>Class Name</label>
-            <input disabled={locked} className={styles.input + ` font-mono ${dark? 'bg-slate-700 border-slate-500 text-slate-100 placeholder-slate-400':''}`} value={stepClassName} onChange={e=>setStepClassName(e.target.value)} placeholder="PassengerandContactDetailsSteps" />
-            <div className={`mt-1 text-[11px] ${invalidStepClass? 'text-red-500':'text-gray-500'} ${dark? '!text-gray-400':''}`}>{invalidStepClass? 'Geçersiz sınıf adı':'Sınıf adını düzenleyin.'}</div>
-          </div>
-          <div className="mt-1 mb-2 text-xs font-semibold uppercase tracking-wide text-indigo-600">{t('steps')}</div>
-          <div className="mb-3">
-            <div className={`text-xs ${dark? 'text-gray-300':'text-gray-600'}`}>{t('stepFormat1')}</div>
-            <div className={`text-xs ${dark? 'text-gray-500':'text-gray-400'}`}>{t('stepFormat2')}</div>
-          </div>
-          <div className="space-y-2 mb-3">
-            {stepEntries.map((se) => {
-              const filled = outputMode && stepClassName.trim() && se.pageName.trim() && se.action.trim() && se.element.trim();
-              return (
-                <div key={se.id} className={`grid grid-cols-12 gap-2 rounded-lg border p-3 shadow-sm ${dark? 'bg-slate-900/40 border-slate-600':'bg-white/80'}`}>
-                  <div className="col-span-3">
-                    <label className={`mb-1 block text-[9px] font-semibold uppercase tracking-wide ${dark? 'text-gray-300':'text-gray-600'}`}>Page Name</label>
-                    <input disabled={locked} className={styles.input + (dark? ' bg-slate-700 border-slate-500 text-slate-100 placeholder-slate-400':'')} value={se.pageName} onChange={e=>{ if(e.target.value.trim() && !pageNameTouched) setPageNameTouched(true); updateStepEntry(se.id,{pageName:e.target.value}); }} placeholder="Home page" />
+          {(stepDefsCode || pageClassCode) && (
+            <div className="mt-8">
+              <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-indigo-600">Generated Classes</div>
+              {stepDefsCode && pageClassCode && (
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="relative">
+                    <pre className="max-h-96 overflow-auto rounded-xl bg-[#0F172A] p-3 pt-8 text-[11px] leading-5 text-slate-100 whitespace-pre ring-1 ring-slate-800/50 dark:ring-slate-700/60 shadow-lg">{stepDefsCode}</pre>
+                    <div className={styles.codeLabel}>Step Class</div>
+                    <div className={styles.codeBtnsWrap}>
+                      <button className={styles.codeBtn} onClick={clearStepDefs}>{t('clear')}</button>
+                      <button className={styles.codeBtn} onClick={()=>navigator.clipboard.writeText(stepDefsCode)}>{t('copy')}</button>
+                      <button className={styles.codeBtn} onClick={()=>downloadFile(`${stepClassName||'Steps'}.java`, stepDefsCode)}>{t('download')}</button>
+                    </div>
                   </div>
-                  <div className="col-span-2">
-                    <label className={`mb-1 block text-[9px] font-semibold uppercase tracking-wide ${dark? 'text-gray-300':'text-gray-600'}`}>Action</label>
-                    <input disabled={locked} className={styles.input + (dark? ' bg-slate-700 border-slate-500 text-slate-100 placeholder-slate-400':'')} value={se.action} onChange={e=>updateStepEntry(se.id,{action:e.target.value})} placeholder="Click" />
+                  <div className="relative">
+                    <pre className="max-h-96 overflow-auto rounded-xl bg-[#0F172A] p-3 pt-8 text-[11px] leading-5 text-slate-100 whitespace-pre ring-1 ring-slate-800/50 dark:ring-slate-700/60 shadow-lg">{pageClassCode}</pre>
+                    <div className={styles.codeLabel}>Page Class</div>
+                    <div className={styles.codeBtnsWrap}>
+                      <button onClick={()=>setPageClassCode("")} className={styles.codeBtn}>{t('clear')}</button>
+                      <button onClick={()=>navigator.clipboard.writeText(pageClassCode)} className={styles.codeBtn}>{t('copy')}</button>
+                      <button onClick={()=>downloadFile(`${pageClassName||'Page'}.java`, pageClassCode)} className={styles.codeBtn}>{t('download')}</button>
+                    </div>
                   </div>
-                  <div className="col-span-5">
-                    <label className={`mb-1 block text-[9px] font-semibold uppercase tracking-wide ${dark? 'text-gray-300':'text-gray-600'}`}>Element Adı</label>
-                    <input disabled={locked} className={styles.input + (dark? ' bg-slate-700 border-slate-500 text-slate-100 placeholder-slate-400':'')} value={se.element} onChange={e=>updateStepEntry(se.id,{element:e.target.value})} placeholder="Search" />
-                  </div>
-                  <div className="col-span-2 flex items-end justify-end gap-2">
-                    <button
-                      className={`${styles.tinyBtn} ${(!locked && filled) ? 'hover:bg-gray-100' : 'opacity-40 cursor-not-allowed'}`}
-                      title={filled ? 'Bu stepler dahil sınıfı üret' : 'Önce Class Name ve tüm alanları doldurun'}
-                      onClick={!locked && filled ? generateStepDefs : undefined}
-                      disabled={locked || !filled}
-                    >{t('generate')}</button>
-                    <button disabled={locked} className={`${styles.tinyBtn}`} title="Sil" onClick={()=>!locked && removeStepEntry(se.id)}>{t('delete')}</button>
-                  </div>
-                  {filled && (
-                    <div className="col-span-12 text-[10px] text-green-600">{t('ready')}</div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-          <div className="flex flex-wrap items-center gap-2 mb-3">
-            <button disabled={locked} onClick={()=>!locked && addStepEntry()} className={styles.primaryBtn}>{t('addStep')}</button>
-          </div>
-          {pageNameTouched && outputMode && (
-            <div className="relative mb-4">
-              <pre className="max-h-48 overflow-auto rounded-xl bg-[#0F172A] p-3 pt-7 text-[11px] leading-5 text-slate-100 whitespace-pre-wrap ring-1 ring-slate-800/50 dark:ring-slate-700/60 shadow-lg">{modePreview || '# Page name girildi. Action ve Element alanlarını doldurdukça burada satırlar oluşacak.'}</pre>
-              <div className={styles.codeLabel}>{outputMode === 'grid' ? 'Grid' : 'Gherkin'} Preview</div>
-              {modePreview && (
-                <div className={styles.codeBtnsWrap}>
-                  <button className={styles.codeBtn} onClick={()=>navigator.clipboard.writeText(modePreview)}>Kopyala</button>
                 </div>
               )}
-            </div>
-          )}
-          <>
-            {stepDefsCode && !pageClassCode && (
-              <div className="relative">
-                <pre className="max-h-96 overflow-auto rounded-xl bg-[#0F172A] p-3 pt-8 text-[11px] leading-5 text-slate-100 whitespace-pre ring-1 ring-slate-800/50 dark:ring-slate-700/60 shadow-lg">{stepDefsCode}</pre>
-                <div className={styles.codeLabel}>Step Class</div>
-                <div className={styles.codeBtnsWrap}>
-                  <button className={styles.codeBtn} onClick={clearStepDefs}>{t('clear')}</button>
-                  <button className={styles.codeBtn} onClick={()=>navigator.clipboard.writeText(stepDefsCode)}>{t('copy')}</button>
-                  <button className={styles.codeBtn} onClick={()=>downloadFile(`${stepClassName||'Steps'}.java`, stepDefsCode)}>{t('download')}</button>
-                </div>
-              </div>
-            )}
-          </>
-          <div className="h-px bg-gray-200" />
-          <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-indigo-600">{t('pageClass')}</div>
-          <div className="mb-3 text-[11px] text-gray-500">{t('pageClassInfo1')} <strong>{stepClassName ? stepClassName.replace(/Steps?$/i,'') + 'Page' : 'GeneratedPage'}</strong></div>
-          <div className="mb-2 text-[11px] text-gray-500">{t('pageClassInfo2')}</div>
-          {pageClassCode && !stepDefsCode && (
-            <div className="relative mt-2">
-              <pre className="max-h-96 overflow-auto rounded-xl bg-[#0F172A] p-3 pt-8 text-[11px] leading-5 text-slate-100 whitespace-pre ring-1 ring-slate-800/50 dark:ring-slate-700/60 shadow-lg">{pageClassCode}</pre>
-              <div className={styles.codeLabel}>Page Class</div>
-              <div className={styles.codeBtnsWrap}>
-                <button onClick={()=>setPageClassCode("")} className={styles.codeBtn}>{t('clear')}</button>
-                <button onClick={()=>navigator.clipboard.writeText(pageClassCode)} className={styles.codeBtn}>{t('copy')}</button>
-                <button onClick={()=>downloadFile(`${pageClassName||'Page'}.java`, pageClassCode)} className={styles.codeBtn}>{t('download')}</button>
-              </div>
-            </div>
-          )}
-          {stepDefsCode && pageClassCode && (
-            <div className="mt-4">
-              <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-indigo-600">{t('previews')}</div>
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="relative">
+              {stepDefsCode && !pageClassCode && (
+                <div className="relative mt-2">
                   <pre className="max-h-96 overflow-auto rounded-xl bg-[#0F172A] p-3 pt-8 text-[11px] leading-5 text-slate-100 whitespace-pre ring-1 ring-slate-800/50 dark:ring-slate-700/60 shadow-lg">{stepDefsCode}</pre>
                   <div className={styles.codeLabel}>Step Class</div>
                   <div className={styles.codeBtnsWrap}>
@@ -662,7 +733,9 @@ export default function App() {
                     <button className={styles.codeBtn} onClick={()=>downloadFile(`${stepClassName||'Steps'}.java`, stepDefsCode)}>{t('download')}</button>
                   </div>
                 </div>
-                <div className="relative">
+              )}
+              {pageClassCode && !stepDefsCode && (
+                <div className="relative mt-2">
                   <pre className="max-h-96 overflow-auto rounded-xl bg-[#0F172A] p-3 pt-8 text-[11px] leading-5 text-slate-100 whitespace-pre ring-1 ring-slate-800/50 dark:ring-slate-700/60 shadow-lg">{pageClassCode}</pre>
                   <div className={styles.codeLabel}>Page Class</div>
                   <div className={styles.codeBtnsWrap}>
@@ -671,7 +744,7 @@ export default function App() {
                     <button onClick={()=>downloadFile(`${pageClassName||'Page'}.java`, pageClassCode)} className={styles.codeBtn}>{t('download')}</button>
                   </div>
                 </div>
-              </div>
+              )}
             </div>
           )}
         </div>
