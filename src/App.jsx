@@ -765,8 +765,18 @@ export default function App() {
     return withPage.map(lineFor).join('\n');
   },[stepEntries, outputMode]);
 
+  const backdropCodeSample = useMemo(()=>{
+    const parts = [];
+    if(fullJavaFile) parts.push(fullJavaFile.trim());
+    if(stepDefsCode) parts.push(stepDefsCode.trim());
+    if(pageClassCode) parts.push(pageClassCode.trim());
+    if(featureCode) parts.push(featureCode.trim());
+    if(!parts.length) return `// Cucumber Step Builder\n// Başlamak için locator ekleyin...\npublic class Example {\n    public static void main(String[] args) {\n        System.out.println(\"Hello\");\n    }\n}`;
+    return parts.join('\n\n');
+  },[fullJavaFile, stepDefsCode, pageClassCode, featureCode]);
+
   return (
-  <div className={`relative mx-auto min-h-screen max-w-5xl space-y-6 overflow-hidden p-6 transition-colors`}> 
+    <div className={`relative mx-auto min-h-screen max-w-5xl space-y-6 overflow-hidden p-6 transition-colors`}> 
       {showSplash && (
         <div className="splash-screen pointer-events-none fixed inset-0 z-[999] flex items-center justify-center bg-white dark:bg-[#050C18]">
           <div className="flex flex-col items-center gap-4 -translate-y-16 md:-translate-y-24">
