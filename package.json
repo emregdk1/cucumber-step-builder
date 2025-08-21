@@ -10,6 +10,7 @@
   "build:single": "vite build && node scripts/inline-dist.js",
   "build:single:clean": "vite build && node scripts/inline-dist.js --clean-assets",
   "build:single:minimal": "vite build && node scripts/inline-dist.js --no-backup --clean-assets",
+  "build:single:datauri": "vite build && node scripts/inline-dist.js --data-uri-js --clean-assets",
     "preview": "vite preview"
   },
   "dependencies": {
