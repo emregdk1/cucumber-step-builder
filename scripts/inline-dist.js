@@ -1,13 +1,17 @@
 // Single-file inliner: replaces dist/index.html with fully inlined HTML (CSS + JS embedded)
-// Usage: node scripts/inline-dist.js [--no-backup] [--clean-assets]
-//  --no-backup     : Do not create index.original.html backup
-//  --clean-assets  : After inlining, delete dist/assets directory (only if inline succeeded)
+// Usage: node scripts/inline-dist.js [--no-backup] [--clean-assets] [--css-only] [--debug-overlay]
+//  --no-backup       : Do not create index.original.html backup
+//  --clean-assets    : After inlining, delete dist/assets directory (only if inline succeeded and JS fully inlined)
+//  --css-only        : Only inline CSS (leave JS as external file) – useful if full JS inlining breaks dynamic imports
+//  --debug-overlay   : Inject a tiny runtime error/log overlay for troubleshooting white screen issues
 import fs from 'fs';
 import path from 'path';
 
 const args = process.argv.slice(2);
 const NO_BACKUP = args.includes('--no-backup');
 const CLEAN_ASSETS = args.includes('--clean-assets');
+const CSS_ONLY = args.includes('--css-only');
+const DEBUG_OVERLAY = args.includes('--debug-overlay');
 
 const distDir = path.resolve('dist');
 const htmlPath = path.join(distDir, 'index.html');
@@ -50,13 +54,26 @@ for(const seg of segments){
     } else {
       out += `<!-- missing css ${seg.ref} -->`;
     }
-  } else {
-    if(fs.existsSync(filePath)){
-      let js = fs.readFileSync(filePath,'utf8');
-      js = js.replace(/<\/script/gi,'<\\/script');
-      out += `<script type="module">${js}</script>`;
+  } else { // js
+    if(CSS_ONLY){
+      // Keep original external script tag for JS
+      out += html.slice(seg.start, seg.end);
     } else {
-      out += `<!-- missing js ${seg.ref} -->`;
+      if(fs.existsSync(filePath)){
+        let js = fs.readFileSync(filePath,'utf8');
+        js = js.replace(/<\/script/gi,'<\\/script');
+        out += `<script type="module">/*INLINE_BUNDLE_START*/${js}/*INLINE_BUNDLE_END*/</script>`;
+        const wrapped = `try{\n/*INLINE_BUNDLE_START*/${js}/*INLINE_BUNDLE_END*/\n}catch(e){\n  console.error('[boot-error]', e);\n  window.__BOOT_ERROR = e;\n  try{\n    const r=document.getElementById('root');\n    if(r){r.innerHTML='<div style=\\"font:14px monospace;padding:16px;color:#b91c1c;background:#fff5f5;border:1px solid #fca5a5;border-radius:4px;\\">'+
+      '<h2 style=\\"margin-top:0;font-size:16px;color:#991b1b;\\">Uygulama başlatılamadı</h2>'+
+      '<div>Hata: '+(e&&e.message?e.message:'(bilinmiyor)')+'</div>'+
+      '<div style=\\"margin-top:8px;\\">Detay için konsolu (F12) açın.</div>'+
+      '</div>';}
+  }catch(_){}
+}`;
+        out += `<script type="module">${wrapped}</script>`;
+      } else {
+        out += `<!-- missing js ${seg.ref} -->`;
+      }
     }
   }
   cursor = seg.end;
@@ -65,9 +82,16 @@ for(const seg of segments){
 out += html.slice(cursor);
 html = out;
 
-// Final safety: ensure no external module script tags remain
-if (/<script type="module" crossorigin src=.*><\/script>/.test(html)) {
-  console.warn('[inline-dist] Warning: Not all module scripts were inlined.');
+if(!CSS_ONLY){
+  // Final safety: ensure no external module script tags remain
+  if (/<script type="module" crossorigin src=.*><\/script>/.test(html)) {
+    console.warn('[inline-dist] Warning: Not all module scripts were inlined.');
+  }
+}
+
+if(DEBUG_OVERLAY){
+  const overlay = `\n<script>(function(){\n  const log=[];\n  const style='position:fixed;bottom:0;left:0;max-height:40%;width:100%;overflow:auto;background:#111;color:#0f0;font:12px monospace;z-index:99999;padding:6px;border-top:2px solid #0f0';\n  function ensure(){if(!window.__DBG){const d=document.createElement('div');d.id='__DBG';d.setAttribute('style',style);document.body.appendChild(d);window.__DBG=d;}return window.__DBG;}\n  ['log','error'].forEach(k=>{const orig=console[k];console[k]=function(...a){log.push({k,a});try{orig.apply(console,a);}catch(_){}const el=ensure();const line=document.createElement('div');line.textContent='['+k+'] '+a.join(' ');el.appendChild(line);};});\n  window.addEventListener('error',e=>{console.error('ERROR',e.message);});\n  window.addEventListener('unhandledrejection',e=>{console.error('REJECTION', e.reason);});\n  setTimeout(()=>{if(!document.getElementById('root')||!document.getElementById('root').children.length){console.log('root empty after 2s');}},2000);\n})();</script>`;
+  html = html.replace(/<\/body>/i, overlay + '\n</body>');
 }
 
 // Overwrite index.html directly (single deliverable). Keep one-time backup as index.original.html if absent.
@@ -88,7 +112,7 @@ try {
   const size2 = (fs.statSync(htmlPath).size / 1024).toFixed(1);
   console.log(`[inline-dist] Inlined dist/index.html (${size2} kB)`);
 
-  if(CLEAN_ASSETS) {
+  if(CLEAN_ASSETS && !CSS_ONLY) {
     const assetsDir = path.join(distDir, 'assets');
     if(fs.existsSync(assetsDir)) {
       // Recursive remove

@@ -1,0 +1,13 @@
+[build]
+  command = "npm run build:single" # assets klasörü kalsın (lazy/dynamic import sorun çıkmasın)
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "18"
+  NPM_FLAGS = "--no-audit --no-fund"
+
+# İleride gerekirse 404 için single-page fallback eklenebilir
+# [[redirects]]
+#   from = "/*"
+#   to = "/index.html"
+#   status = 200
