@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "vite build && node scripts/inline-dist.js",
     "build:raw": "vite build",
-    "build:single": "vite build && node scripts/inline-dist.js",
+  "build:single": "vite build && node scripts/inline-dist.js",
+  "build:single:clean": "vite build && node scripts/inline-dist.js --clean-assets",
+  "build:single:minimal": "vite build && node scripts/inline-dist.js --no-backup --clean-assets",
     "preview": "vite preview"
   },
   "dependencies": {
