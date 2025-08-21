@@ -64,7 +64,25 @@ if (/<script type="module" crossorigin src=.*><\/script>/.test(html)) {
   console.warn('[inline-dist] Warning: Not all module scripts were inlined.');
 }
 
+// Write inline file (original behavior)
 const outPath = path.join(distDir, 'index.inline.html');
 fs.writeFileSync(outPath, html, 'utf8');
 const sizeKB = (fs.statSync(outPath).size / 1024).toFixed(1);
 console.log(`[inline-dist] Created ${outPath} (${sizeKB} kB)`);
+
+// Netlify (and most static hosts) expect an index.html entry point.
+// We overwrite dist/index.html with the inlined version, but first keep a single backup once.
+try {
+  const originalBackup = path.join(distDir, 'index.original.html');
+  if(!fs.existsSync(originalBackup)) {
+    // Only back up if current dist/index.html still has external refs (heuristic) or no backup yet
+    const orig = fs.readFileSync(htmlPath,'utf8');
+    fs.writeFileSync(originalBackup, orig, 'utf8');
+    console.log('[inline-dist] Backed up original index.html -> index.original.html');
+  }
+  fs.writeFileSync(htmlPath, html, 'utf8');
+  const size2 = (fs.statSync(htmlPath).size / 1024).toFixed(1);
+  console.log(`[inline-dist] Overwrote dist/index.html with inlined content (${size2} kB)`);
+} catch(e){
+  console.warn('[inline-dist] Could not overwrite index.html:', e.message);
+}
