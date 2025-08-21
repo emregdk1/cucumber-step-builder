@@ -1,6 +1,7 @@
 import React, { useMemo, useState, useEffect, useCallback, useRef } from "react";
 import Prism from 'prismjs';
 import 'prismjs/components/prism-java';
+import 'prismjs/components/prism-gherkin';
 import 'prismjs/themes/prism-tomorrow.css';
 import JSZip from 'jszip';
 
@@ -27,37 +28,43 @@ const styles = {
 
 // (Legacy step scenario generator removed)
 
-function TabbedCode({ model, steps, page, onClear, t, downloadFile }) {
+function TabbedCode({ model, steps, page, feature, onClear, t, downloadFile }) {
   const tabs = [
-    model.code && { key:'model', label:'Model', data:model },
-    steps.code && { key:'steps', label:'Steps', data:steps },
-    page.code && { key:'page', label:'Page', data:page }
+    model.code && { key:'model', label:'Model', data:model, lang:'java' },
+    steps.code && { key:'steps', label:'Steps', data:steps, lang:'java' },
+    page.code && { key:'page', label:'Page', data:page, lang:'java' },
+    feature.code && { key:'feature', label:'Feature', data:feature, lang:'gherkin' }
   ].filter(Boolean);
   const [active, setActive] = useState(tabs[0]?.key || '');
-  useEffect(()=>{ if(!tabs.find(tb=>tb.key===active) && tabs[0]) setActive(tabs[0].key); },[model.code, steps.code, page.code]);
+  useEffect(()=>{ if(!tabs.find(tb=>tb.key===active) && tabs[0]) setActive(tabs[0].key); },[model.code, steps.code, page.code, feature.code]);
   if(!tabs.length) return null;
   const current = tabs.find(tb=>tb.key===active) || tabs[0];
   const code = current.data.code;
   const fileName = current.data.name;
-  const clearMap = { model:onClear.model, steps:onClear.steps, page:onClear.page };
+  const clearMap = { model:onClear.model, steps:onClear.steps, page:onClear.page, feature:onClear.feature };
   const codeRef = useRef(null);
+  const [copied, setCopied] = useState(false);
   // Highlight only the active code block on tab or content change
   useEffect(()=>{
     if(codeRef.current) Prism.highlightElement(codeRef.current);
-  },[active, code]);
+    setCopied(false);
+  },[active, code, current.lang]);
   return (
     <div className="rounded-2xl border bg-slate-900/90 dark:border-slate-700 border-slate-800 shadow-inner">
-      <div className="flex items-center gap-1 border-b border-slate-700/60 px-2 py-1 text-[11px]">
+      <div className="flex items-center gap-1 border-b border-slate-700/60 px-2 py-1 text-[11px] backdrop-blur-sm">
         {tabs.map(tb=> (
-          <button key={tb.key} onClick={()=>setActive(tb.key)} className={`px-3 py-1 rounded-md font-medium tracking-wide transition ${active===tb.key? 'bg-indigo-600 text-white shadow':'text-slate-300 hover:bg-slate-700'}`}>{tb.label}</button>
+          <button key={tb.key} onClick={()=>setActive(tb.key)} className={`relative px-3 py-1 rounded-md font-medium tracking-wide transition ${active===tb.key? 'bg-gradient-to-r from-indigo-600 to-fuchsia-600 text-white shadow ring-1 ring-indigo-400/50':'text-slate-300 hover:bg-slate-700'}`}>
+            {tb.label}
+            {active===tb.key && <span className="absolute left-0 right-0 -bottom-px h-[3px] bg-gradient-to-r from-indigo-400 to-fuchsia-500 rounded-t" />}
+          </button>
         ))}
         <div className="ml-auto flex gap-1">
-          <button className="rounded bg-white/10 px-2 py-0.5 text-[10px] text-white hover:bg-white/20" onClick={()=>navigator.clipboard.writeText(code)}>{t('copy')}</button>
+          <button className="rounded bg-white/10 px-2 py-0.5 text-[10px] text-white hover:bg-white/20" onClick={()=>{navigator.clipboard.writeText(code); setCopied(true); setTimeout(()=>setCopied(false),1200);}}>{copied? '✓': t('copy')}</button>
           <button className="rounded bg-white/10 px-2 py-0.5 text-[10px] text-white hover:bg-white/20" onClick={()=>downloadFile(fileName, code)}>{t('download')}</button>
           <button className="rounded bg-red-500/70 px-2 py-0.5 text-[10px] text-white hover:bg-red-500" onClick={()=>clearMap[current.key]?.()}>{t('clear')}</button>
         </div>
       </div>
-      <pre className="language-java max-h-[480px] overflow-auto p-4 text-[11px] leading-5"><code ref={codeRef} className="language-java">{code}</code></pre>
+  <pre className={`language-${current.lang||'java'} max-h-[480px] overflow-auto p-4 text-[11px] leading-5`}><code ref={codeRef} className={`language-${current.lang||'java'}`}>{code}</code></pre>
       <div className="flex justify-between items-center px-3 py-2 text-[10px] text-slate-400 bg-slate-800/60 border-t border-slate-700/50">
         <span>{fileName}</span>
         <span>{code.split('\n').length} lines</span>
@@ -95,8 +102,13 @@ export default function App() {
   const [pageClassName, setPageClassName] = useState('');
   const [pageClassCode, setPageClassCode] = useState('');
   const [stepDefsCode, setStepDefsCode] = useState('');
+  const [featureCode, setFeatureCode] = useState('');
   const [dark, setDark] = useState(false);
+  // Removed: themeSyncSystem, tags, filter, diff, prevFeature
+  const [showHelp, setShowHelp] = useState(false);
+  // Removed: bulk import modal, method list, multi-scenario
   const [toast, setToast] = useState(null); // {msg}
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [locked] = useState(false); // legacy lock flag (kept for minimal change)
   const [showSplash, setShowSplash] = useState(true);
 
@@ -106,15 +118,11 @@ export default function App() {
   },[]);
 
   // Dark mode class toggle on <html> so tailwind dark: utilities become active everywhere
-  useEffect(()=>{
-    const root = document.documentElement;
-    if(dark) {
-      root.classList.add('dark');
-    } else {
-      root.classList.remove('dark');
-    }
-    try { localStorage.setItem('csb_dark', JSON.stringify(dark)); } catch {}
-  },[dark]);
+    useEffect(()=>{
+      const root = document.documentElement;
+      dark? root.classList.add('dark'):root.classList.remove('dark');
+      try { localStorage.setItem('csb_dark', JSON.stringify(dark)); } catch {}
+    },[dark]);
 
   // İlk yüklemede basit ayarları geri yükle
   useEffect(()=>{
@@ -137,6 +145,7 @@ export default function App() {
 
   // Toast helper
   const showToast = (msg) => { setToast({msg}); setTimeout(()=>setToast(null), 2600); };
+  // Confetti effect removed (istek üzerine görsel efekt kaldırıldı)
 
   // Dış görünüm için element alias dönüştürücü: LOGIN_BUTTON -> loginButton
   const friendlyElement = (raw) => {
@@ -185,11 +194,12 @@ export default function App() {
     setElements(prev => {
       const found = prev.find(e=>e.id===id);
       if(!found) return prev;
-      const copy = { ...found, id: uuid(), alias: (found.alias||'') + '_COPY' };
+      const copy = { ...found, id: uuid() }; // alias aynen bırak
       return [...prev, copy];
     });
     showToast('Kopyalandı');
   };
+  // Removed advanced helpers (reorder, bulk import, duplicate cleanup, validation)
   const generateCodeFor = (id) => {
     const el = elements.find(e => e.id === id);
     if(!el) return;
@@ -229,26 +239,42 @@ export default function App() {
     tr: {
       // Toasts
   toastModelCleared:'Model temizlendi', toastStepsGenerated:'Steps üretildi', toastStepsCleared:'Steps temizlendi', toastPageCleared:'Page temizlendi', toastZip:'ZIP indirildi', toastReset:'Sıfırlandı',
-  noteGeneratedFromElements:'Step ve Page class\'ları aşağıdaki Locator listesinden türetilir.',
+  noteGeneratedFromElements:'Step Definitions, Page class ve Feature dosyaları aşağıdaki Locator listesinden türetilir.',
       // Global buttons
       zip:'ZIP İndir', reset:'Reset',
   copyAll:'Hepsini Kopyala', export:'Dışa Aktar', import:'İçe Aktar', stats:'İstatistikler', duplicate:'Kopyala',
       // Section 1
   section1Title:'Model, Steps, Page Steps & Locator Tanımları',
   elements:'Locators', addElement:'Locator ekle', generate:'Üret', delete:'Sil',
-  elementGuideTitle:'Nasıl Kullanılır?', elementGuide1:'1) Locator Adı: İşlem yapılacak bileşen (LOGIN_BUTTON, email field vb.).', elementGuide2:'2) Locator Türü seçin ve Locator değerini girin.', elementGuide3:'3) Action seçin (Click, Send Keys, Check, Set Saved, Get Saved ...).', elementGuide4:"4) Üret'e basarak locator sabitini model sınıfına ekleyin.", elementGuide5:"5) Tüm locatorları ekleyince 'Stepleri Locatorlardan Üret' ile Step & Page class'larını oluşturun.", elementGuide6:"Not: 'Set Saved' texti ScenarioContext'e yazar, 'Get Saved' aynı anahtarı okuyup Send Keys yapar.", elementGuide7:"7) ⧉ butonu ile mevcut locator'ı kopyalayarak hızlıca benzer bir tane oluşturabilirsiniz.",
+  elementGuideTitle:'Nasıl Kullanılır?',
+  elementGuide1:'1) Locator Adı: Üzerinde işlem yapacağınız öğenin anlamlı bir adı (LOGIN_BUTTON, EMAIL_INPUT vb.).',
+  elementGuide2:'2) Locator Türü (id, xpath, css...) seçin ve değeri girin.',
+  elementGuide3:'3) Action seçin: Click, Send Keys, Check / Should See (doğrulama), Set Saved (metni kaydet), Get Saved (kaydedileni yaz).',
+  elementGuide4:"4) Üret'e tıklayın: Sabit (public static final By ...) model sınıfına eklenir.",
+  elementGuide5:"5) Tüm locatorlar bittiğinde 'Stepleri Locatorlardan Üret' ile Steps, Page ve Feature dosya içeriği oluşturulur.",
+  elementGuide6:"6) Feature sekmesinden senaryoyu kopyalayabilir ya da ZIP ile hepsini indirebilirsiniz.",
+  elementGuide7:"7) ⧉ ile mevcut locator'ı çoğaltarak küçük değişikliklerle yenisini hızlı ekleyin.",
+  elementGuideNote:"Not: 'Set Saved' bulunduğu elementin textini ScenarioContext'e anahtar olarak LOCATOR ADI ile yazar; 'Get Saved' aynı anahtarı okuyup Send Keys uygular.",
       // Section 2
   stepDefsSettings:'Java Step Definitions Ayarları', steps:'Steps', pageClass:'Page Class', previews:'Önizlemeler',
   clear:'Temizle', copy:'Kopyala', download:'İndir',
     },
     en: {
   toastModelCleared:'Model cleared', toastStepsGenerated:'Steps generated', toastStepsCleared:'Steps cleared', toastPageCleared:'Page cleared', toastZip:'ZIP downloaded', toastReset:'Reset done',
-  noteGeneratedFromElements:'Step & Page classes are generated from the Locator list below.',
+  noteGeneratedFromElements:'Step, Page & Feature classes are generated from the Locator list below.',
       zip:'Download ZIP', reset:'Reset',
   copyAll:'Copy All', export:'Export', import:'Import', stats:'Stats', duplicate:'Duplicate',
   section1Title:'Model, Steps & Locators',
   elements:'Locators', addElement:'Add locator', generate:'Generate', delete:'Delete',
-  elementGuideTitle:'How to Use', elementGuide1:'1) Locator Name: component you will interact with (LOGIN_BUTTON, email field, etc.).', elementGuide2:'2) Select Locator Type and enter Locator value.', elementGuide3:'3) Choose Action (Click, Send Keys, Check, Set Saved, Get Saved ...).', elementGuide4:'4) Press Generate to add the locator constant to the model.', elementGuide5:"5) After adding all, click 'Stepleri Locatorlardan Üret' to build Step & Page classes.", elementGuide6:"Note: 'Set Saved' stores text in ScenarioContext, 'Get Saved' reads and sends it.", elementGuide7:'7) Use the ⧉ button to duplicate an existing locator quickly.',
+  elementGuideTitle:'How to Use',
+  elementGuide1:'1) Locator Name: Meaningful name of the target element (LOGIN_BUTTON, EMAIL_INPUT, etc.).',
+  elementGuide2:'2) Pick Locator Type (id, xpath, css...) and enter its value.',
+  elementGuide3:'3) Choose Action: Click, Send Keys, Check / Should See (assert), Set Saved (store text), Get Saved (retrieve & type).',
+  elementGuide4:'4) Click Generate: constant (public static final By ...) is added to the model class.',
+  elementGuide5:"5) When done, use 'Stepleri Locatorlardan Üret' to generate Steps, Page and the Feature content.",
+  elementGuide6:'6) Copy the scenario from the Feature tab or download everything as a ZIP.',
+  elementGuide7:'7) Use ⧉ to duplicate a locator quickly.',
+  elementGuideNote:"Note: 'Set Saved' stores the element text in ScenarioContext with the LOCATOR NAME as key; 'Get Saved' fetches it and performs Send Keys.",
   stepDefsSettings:'Java Step Definitions Settings', steps:'Steps', pageClass:'Page Class', previews:'Previews',
   clear:'Clear', copy:'Copy', download:'Download',
     }
@@ -321,15 +347,32 @@ export default function App() {
     })();
     const pageVarName = pageClsName.replace(/[^A-Za-z0-9]/g,'').toLowerCase();
   const srcEntries = entriesOverride || stepEntries;
-  const methods = srcEntries
-      .filter(e => e.pageName.trim() && e.action.trim() && e.element.trim())
-      .map(e => {
+  const annotationInners = [];
+  const filtered = srcEntries.filter(e => e.pageName.trim() && e.action.trim() && e.element.trim());
+  const methods = filtered.map((e) => {
   const pageNameRaw = e.pageName.trim();
   const actionRaw = e.action.trim();
   const elementRaw = e.element.trim();
   const elementDisplay = friendlyElement(elementRaw);
   const elementPascal = aliasPascal(elementRaw);
-        const annotationType = /should|check/i.test(actionRaw) ? 'Then' : 'When';
+        // Explicit annotation mapping per user rules
+        const actKey = actionRaw.trim().toLowerCase();
+        let annotationType;
+        switch(actKey) {
+          case 'click':
+          case 'send keys':
+          case 'get saved':
+            annotationType = 'When'; break;
+          case 'check':
+          case 'check text':
+          case 'should see':
+            annotationType = 'Then'; break;
+          case 'set saved':
+            annotationType = 'Given'; break;
+          default:
+            // Fallback: assertions -> Then else When
+            annotationType = /should see|check text|\bcheck\b/i.test(actionRaw) ? 'Then' : 'When';
+        }
         // Mode'a göre annotation içeriği
         let inner;
         if (outputMode === 'grid') {
@@ -359,7 +402,8 @@ export default function App() {
             inner = inner.replace(/Get Saved/i,'Send Keys');
           }
         }
-        const annotation = `@${annotationType}("${inner}")`;
+  annotationInners.push({ inner, annotationType }); // collect annotation type for feature file
+  const annotation = `@${annotationType}("${inner}")`;
         // New naming pattern: pageName + action + element in camelCase
         const pagePascal = pascal(pageNameRaw);
         const normalizedActionForName = isGetSaved ? 'Send Keys' : actionRaw; // get saved görünürde send keys gibi
@@ -386,7 +430,8 @@ export default function App() {
   const cls = `public class ${stepClassName} {\n\n${header}${methods.join("\n\n")}\n}\n`;
     setStepDefsCode(cls);
   showToast(t('toastStepsGenerated'));
-    generatePageClass(srcEntries);
+  generatePageClass(srcEntries);
+  generateFeatureFile(srcEntries, annotationInners);
     } catch(err) {
       console.error('[generateStepDefs] hata:', err);
       showToast('Step üretim hatası (console)');
@@ -456,6 +501,53 @@ export default function App() {
     setPageClassCode(cls);
   };
   const clearPageClass = () => { setPageClassCode(""); showToast(t('toastPageCleared')); };
+  const clearFeature = () => { setFeatureCode(''); };
+
+  const generateFeatureFile = (entriesOverride, annotationInners) => {
+    try {
+      const srcEntries = entriesOverride || stepEntries;
+      if(!srcEntries.length) { setFeatureCode(''); return; }
+      const featureName = (javaClassName || 'Generated').replace(/Model$/,'');
+      const featureTitle = `Feature: ${featureName} Feature`;
+      const scenarioName = `${featureName.toLowerCase()}feature1`;
+      const lines = [];
+      if(annotationInners && annotationInners.length) {
+        let lastType = null;
+        annotationInners.forEach(obj => {
+          if(typeof obj === 'string') { lines.push((lastType ? 'And':'When') + ' ' + obj); return; }
+          const { inner, annotationType } = obj;
+          const keyword = (lastType === annotationType ? 'And' : annotationType);
+          lines.push(`${keyword} ${inner}`);
+          lastType = annotationType;
+        });
+      } else {
+        srcEntries.forEach(e=>{
+          if(!(e.pageName && e.action && e.element)) return;
+          const page = e.pageName.trim();
+          const action = e.action.trim();
+          const element = e.element.trim();
+          const elementDisp = friendlyElement(element);
+          const actLower = action.toLowerCase();
+          let line;
+          if(outputMode === 'grid') {
+            let core = `${page}, ${action}, ${elementDisp}`;
+            if(/get saved/.test(actLower)) core = `${page}, Send Keys, ${elementDisp}`;
+            if(/send keys|check text|check/i.test(actLower) && !/get saved/.test(actLower)) core += ': <text>';
+            line = 'And ' + core;
+          } else {
+            if(actLower === 'should see' || actLower === 'check') line = `And I should see ${elementDisp} on ${page}`;
+            else if(actLower === 'check text') line = `And I should see text of ${elementDisp} on ${page}`;
+            else if(actLower === 'send keys') line = `And I fill ${elementDisp} on ${page} with "<text>"`;
+            else if(actLower === 'click') line = `And I click ${elementDisp} on ${page}`;
+            else line = `And I ${action} ${elementDisp} on ${page}`;
+          }
+          lines.push(line);
+        });
+      }
+      const body = [featureTitle,'','  Scenario: '+scenarioName, ...lines.map(l=>'    '+l)].join('\n');
+      setFeatureCode(body+'\n');
+    } catch(err) { console.error('[generateFeatureFile] hata', err); }
+  };
 
   // Validation
   const invalidJavaClass = javaClassName && !/^[A-Z][A-Za-z0-9_]*$/.test(javaClassName);
@@ -477,6 +569,7 @@ export default function App() {
     if(fullJavaFile) zip.file(`${classNameSafe}.java`, fullJavaFile);
     if(stepDefsCode) zip.file(`${stepClassName||'Steps'}.java`, stepDefsCode);
     if(pageClassCode) zip.file(`${pageClassName||'Page'}.java`, pageClassCode);
+    if(featureCode) zip.file(`${(javaClassName||'Generated').replace(/Model$/,'')}Feature.feature`, featureCode);
     if(Object.keys(zip.files).length === 0) return;
     const blob = await zip.generateAsync({type:'blob'});
     const a = document.createElement('a');
@@ -534,11 +627,25 @@ export default function App() {
 
   // Copy all visible code
   const handleCopyAll = () => {
-    const all = [fullJavaFile, stepDefsCode, pageClassCode].filter(Boolean).join('\n\n');
+  const all = [fullJavaFile, stepDefsCode, pageClassCode, featureCode].filter(Boolean).join('\n\n');
     if(!all) return;
     navigator.clipboard.writeText(all);
     showToast(t('copyAll'));
   };
+  const methodList = useMemo(()=>{
+    if(!stepDefsCode) return [];
+    const lines = stepDefsCode.split(/\n/);
+    const out = [];
+    let currentAnn = '';
+    lines.forEach(l=>{
+      const a = l.trim();
+      const annMatch = a.match(/^@(Given|When|Then)\("(.+?)"/);
+      if(annMatch){ currentAnn = annMatch[0]; }
+      const m = a.match(/^public void (\w+)\(/);
+      if(m){ out.push({annotation: currentAnn, method: m[1]}); currentAnn=''; }
+    });
+    return out;
+  },[stepDefsCode]);
 
   // Export / Import
   const importInputRef = useRef(null);
@@ -605,6 +712,7 @@ export default function App() {
 
 
   const handleResetAll = () => {
+  setShowResetConfirm(false); // close confirm modal so overlay disappears
     setElements([]);
     setGeneratedCodes([]);
     setJavaClassName("");
@@ -616,6 +724,7 @@ export default function App() {
     setPageClassCode("");
     setStepDefsCode("");
     setGlobalPageName("");
+  setFeatureCode('');
   showToast(t('toastReset'));
   };
 
@@ -661,19 +770,8 @@ export default function App() {
       {showSplash && (
         <div className="splash-screen pointer-events-none fixed inset-0 z-[999] flex items-center justify-center bg-white dark:bg-[#050C18]">
           <div className="flex flex-col items-center gap-4 -translate-y-16 md:-translate-y-24">
-            <img
-              src="favicon-alt.svg" /* relative path so file:// works */
-              alt="Logo"
-              className="splash-logo h-24 w-24 drop-shadow-xl"
-              onError={(e)=>{
-                // Fallback inline purple circle with C if asset path fails (e.g., when opened via file:// on some browsers)
-                const fallback = 'data:image/svg+xml;base64,'+btoa(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120"><rect width="120" height="120" rx="28" fill="#5b21b6"/><path d="M78 82q-9 8-20 8-15 0-24-11-9-11-7-27 2-15 13-25 11-10 27-8 12 1 22 9l-9 10q-7-6-15-7-10-1-18 5-8 6-9 16t5 18q6 8 15 8t17-7l3-3 10 8-2 3q-2 3-8 7z" fill="#c084fc" stroke="#f5d0fe" stroke-width="2" stroke-linejoin="round"/></svg>`);
-                e.currentTarget.src = fallback;
-              }}
-            />
-            <div className="text-xl font-bold tracking-tight bg-gradient-to-r from-indigo-500 via-fuchsia-500 to-pink-400 bg-clip-text text-transparent select-none">
-              Cucumber Step Builder
-            </div>
+            <img src="favicon-alt.svg" alt="Logo" className="splash-logo h-24 w-24 drop-shadow-xl" />
+            <div className="text-xl font-bold tracking-tight bg-gradient-to-r from-indigo-500 via-fuchsia-500 to-pink-400 bg-clip-text text-transparent select-none">Cucumber Step Builder</div>
           </div>
         </div>
       )}
@@ -691,15 +789,19 @@ export default function App() {
   <div className={dark? 'absolute inset-0 bg-gradient-to-b from-slate-900/40 via-slate-900/10 to-slate-900/60 backdrop-blur-[2px]' : 'absolute inset-0 bg-gradient-to-b from-white/40 via-transparent to-white/50 backdrop-blur-[2px]'} />
       </div>
       <div className="flex items-center justify-between">
-        <h1 className={`text-2xl font-bold tracking-tight drop-shadow-sm ${dark? 'text-slate-100':'text-slate-800'}`}>Cucumber Step Builder</h1>
-        <div className="flex items-center gap-2">
-          <button aria-label="Lang" onClick={toggleLang} className={styles.secondaryBtn + ' text-[11px]'}>{lang==='tr' ? 'EN':'TR'}</button>
-          <button aria-label="Zip" onClick={handleDownloadAll} className={styles.primaryBtn + ' text-[11px]'} disabled={!fullJavaFile && !stepDefsCode && !pageClassCode}>{t('zip')}</button>
-          <button aria-label="Copy All" onClick={handleCopyAll} className={styles.secondaryBtn + ' text-[11px]'} disabled={!fullJavaFile && !stepDefsCode && !pageClassCode}>{t('copyAll')}</button>
-          <button aria-label="Export" onClick={handleExport} className={styles.secondaryBtn + ' text-[11px]'}>{t('export')}</button>
-          <button aria-label="Import" onClick={handleImportClick} className={styles.secondaryBtn + ' text-[11px]'}>{t('import')}</button>
-          <button aria-label="Reset" onClick={handleResetAll} className={styles.secondaryBtn + ' text-[11px]'} title="Reset (Ctrl+Shift+R)">{t('reset')}</button>
-          <button aria-label="Tema" onClick={()=>setDark(d=>!d)} className={styles.secondaryBtn + ' text-[11px]'} title="Tema (Ctrl+Shift+D)">{dark? 'Light':'Dark'} Mode</button>
+        <div className="flex items-center gap-3">
+          <img src="favicon-alt.svg" alt="Logo" className="h-8 w-8 drop-shadow-md rounded-md ring-1 ring-indigo-500/40 bg-white/70 p-1" />
+          <h1 className="text-2xl font-bold tracking-tight bg-gradient-to-r from-indigo-500 via-fuchsia-500 to-pink-500 bg-clip-text text-transparent drop-shadow-sm">Cucumber Step Builder</h1>
+        </div>
+        <div className="flex items-center flex-wrap gap-1">
+          <button onClick={toggleLang} className="px-3 py-2 text-[11px] rounded-md bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600">{lang==='tr'?'EN':'TR'}</button>
+          <button onClick={handleDownloadAll} disabled={!fullJavaFile && !stepDefsCode && !pageClassCode} className="px-3 py-2 text-[11px] rounded-md bg-indigo-600 hover:bg-indigo-700 text-white disabled:opacity-40">⬇ {t('zip')}</button>
+          <button onClick={handleCopyAll} disabled={!fullJavaFile && !stepDefsCode && !pageClassCode} className="px-3 py-2 text-[11px] rounded-md bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600">📋 {t('copyAll')}</button>
+          <button onClick={handleExport} className="px-3 py-2 text-[11px] rounded-md bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600">💾 {t('export')}</button>
+          <button onClick={handleImportClick} className="px-3 py-2 text-[11px] rounded-md bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600">📥 {t('import')}</button>
+          <button onClick={()=>setShowResetConfirm(true)} className="px-3 py-2 text-[11px] rounded-md bg-red-600 text-white hover:bg-red-500" title="Reset (Ctrl+Shift+R)">⚠ {t('reset')}</button>
+          <button onClick={()=>setDark(d=>!d)} className="px-3 py-2 text-[11px] rounded-md bg-slate-900 text-white dark:bg-slate-600 dark:hover:bg-slate-500 hover:bg-slate-800" title="Tema (Ctrl+Shift+D)">{dark? '☀':'🌙'}</button>
+          <button onClick={()=>setShowHelp(true)} className="px-3 py-2 text-[11px] rounded-md bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600">❓</button>
           <input ref={importInputRef} onChange={handleImportFile} type="file" accept="application/json" className="hidden" />
         </div>
       </div>
@@ -727,7 +829,7 @@ export default function App() {
             {t('noteGeneratedFromElements')}
           </div>
           <div className="mb-4">
-            <div className={`mb-2 text-xs font-semibold uppercase tracking-wide ${dark? 'text-indigo-300':'text-indigo-600'}`}>Java Model Ayarları</div>
+            <div className={`mb-2 text-xs font-semibold uppercase tracking-wide ${dark? 'text-indigo-300':'text-indigo-600'}`}>Java Class Ayarları</div>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
               {/* MODEL NAME */}
               <div className="md:col-span-1">
@@ -742,7 +844,7 @@ export default function App() {
               </div>
               {/* STEP CLASS NAME */}
               <div className="md:col-span-1">
-                <label className={`mb-1 block text-[11px] font-semibold uppercase tracking-wide ${dark? 'text-gray-300':'text-gray-600'}`}>STEP CLASS NAME</label>
+                <label className={`mb-1 block text-[11px] font-semibold uppercase tracking-wide ${dark? 'text-gray-300':'text-gray-600'}`}>STEP DEFINITION NAME</label>
                 <input
                   className={styles.input + ` font-mono ${dark? 'bg-slate-700 border-slate-500 text-slate-100 placeholder-slate-400':''}`}
                   placeholder="LoginSteps"
@@ -753,7 +855,7 @@ export default function App() {
               </div>
               {/* PAGE STEPS NAME (previously Global Page Name) */}
               <div className="md:col-span-1">
-                <label className={`mb-1 block text-[11px] font-semibold uppercase tracking-wide ${dark? 'text-gray-300':'text-gray-600'}`}>PAGE STEPS NAME</label>
+                <label className={`mb-1 block text-[11px] font-semibold uppercase tracking-wide ${dark? 'text-gray-300':'text-gray-600'}`}>PAGE NAME</label>
                 <input
                   className={styles.input + ` font-mono ${dark? 'bg-slate-700 border-slate-500 text-slate-100 placeholder-slate-400':''}`}
                   placeholder="LoginPage"
@@ -775,14 +877,21 @@ export default function App() {
               <li className={`${dark? 'text-gray-300':'text-gray-700'}`}>{t('elementGuide4')}</li>
               <li className={`${dark? 'text-gray-300':'text-gray-700'}`}>{t('elementGuide5')}</li>
               <li className={`${dark? 'text-gray-300':'text-gray-700'}`}>{t('elementGuide7')}</li>
-              <li className={`${dark? 'text-amber-600':'text-amber-700'} dark:text-amber-300`}>{t('elementGuide6')}</li>
+              <li className={`${dark? 'text-gray-300':'text-gray-700'}`}>{t('elementGuide6')}</li>
+              <li className={`${dark? 'text-amber-400':'text-amber-600'} font-medium`}>{t('elementGuideNote')}</li>
             </ul>
           </div>
           <div className="space-y-3">
-            {elements.map((el) => {
+            {elements.length===0 && (
+              <div className="rounded-md border border-dashed p-10 text-center text-[12px] text-slate-500 dark:border-slate-600 dark:text-slate-400">
+                <p className="mb-2 font-semibold">Başlamak için bir locator ekleyin</p>
+                <button onClick={addElement} className="inline-flex items-center gap-1 rounded-md bg-indigo-600 hover:bg-indigo-700 text-white text-xs px-4 py-2">➕ {t('addElement')}</button>
+              </div>
+            )}
+      {elements.map((el, idx) => {
               const canGenerate = el.alias.trim() && el.selector.trim() && el.by.trim();
               return (
-                <div key={el.id} className={`group relative rounded-xl border p-3 transition shadow-sm hover:shadow-md ${dark? 'border-slate-600 bg-slate-800/50':'border-slate-200 bg-white/70'} backdrop-blur-sm`}> 
+        <div key={el.id} className={`group relative rounded-xl border p-3 transition shadow-sm hover:shadow-md ${dark? 'border-slate-600 bg-slate-800/50':'border-slate-200 bg-white/70'} backdrop-blur-sm`}> 
                   <div className="grid grid-cols-12 items-end gap-2">
                   <div className="col-span-3">
                     <label className={`mb-1 block text-[10px] font-semibold uppercase tracking-wide ${dark? 'text-gray-300':'text-gray-600'}`}>Locator Adı</label>
@@ -849,40 +958,47 @@ export default function App() {
                   <div className="col-span-1 text-right">
                     <div className="flex gap-1 justify-end">
                       <button className={styles.secondaryBtn + ' px-2'} title={t('duplicate')} onClick={()=>duplicateElement(el.id)}>⧉</button>
-                      <button className={styles.secondaryBtn} onClick={() => removeElement(el.id)}>
-                        Sil
-                      </button>
+                      <button className={styles.secondaryBtn} onClick={() => removeElement(el.id)}>Sil</button>
                     </div>
                   </div>
                   </div>
                   {canGenerate && (
-                    <div className="mt-2 flex items-center justify-between text-[10px] font-medium opacity-80">
+                    <div className="mt-2 flex items-center justify-end text-[10px] font-medium opacity-80">
                       <span className="rounded bg-emerald-500/15 px-2 py-0.5 text-emerald-600 dark:text-emerald-300 dark:bg-emerald-400/10">Ready</span>
-                      <span className="text-[9px] tracking-wide uppercase">{el.alias || 'alias'}</span>
                     </div>
                   )}
                 </div>
               );
             })}
           </div>
-          {/* Stats Bar */}
-          <div className={`mt-4 rounded-md border px-3 py-2 text-[10px] flex flex-wrap gap-x-4 gap-y-1 ${dark? 'border-slate-600 bg-slate-900/40 text-slate-300':'border-slate-200 bg-slate-50 text-slate-600'}`}>
-            <span className="font-semibold uppercase tracking-wide">{t('stats')}:</span>
-            <span>Locators: {stats.locators}</span>
-            <span>Generated: {stats.generated}</span>
-            <span>Steps: {stats.steps}</span>
-          </div>
           <div className="mt-3 mb-4 flex flex-wrap items-center gap-2">
-            <button onClick={addElement} className={styles.primaryBtn}>{t('addElement')}</button>
-            <button onClick={buildStepsFromElements} className={styles.secondaryBtn} title="Seçilen action'a göre sadece Step & Page üret (model kodu varsa)" >Stepleri Locatorlardan Üret</button>
+            {elements.length>0 && (
+              <button onClick={addElement} className={styles.primaryBtn}>{t('addElement')}</button>
+            )}
+            <button
+              onClick={buildStepsFromElements}
+              title="Locator listesinden Steps & Page üret"
+              className={styles.primaryBtn + ' text-[11px] flex items-center gap-1'}
+            >
+              <span className="text-base leading-none">✨</span>
+              <span>Stepleri Locatorlardan Üret</span>
+            </button>
           </div>
-          {(generatedCodes.length>0 || stepDefsCode || pageClassCode) && (
-            <div className="mt-8">
+      {(generatedCodes.length>0 || stepDefsCode || pageClassCode || featureCode) && (
+            <div className="mt-8 space-y-4">
+              {/* Stats Bar moved above output */}
+              <div className={`rounded-md border px-3 py-2 text-[10px] flex flex-wrap gap-x-4 gap-y-1 ${dark? 'border-slate-600 bg-slate-900/40 text-slate-300':'border-slate-200 bg-slate-50 text-slate-600'}`}>
+                <span className="font-semibold uppercase tracking-wide">{t('stats')}:</span>
+                <span>Locators: {stats.locators}</span>
+                <span>Generated: {stats.generated}</span>
+                <span>Steps: {stats.steps}</span>
+              </div>
               <TabbedCode
                 model={{code: fullJavaFile, name:`${classNameSafe}.java`}}
                 steps={{code: stepDefsCode, name:`${stepClassName||'Steps'}.java`}}
                 page={{code: pageClassCode, name:`${pageClassName||'Page'}.java`}}
-                onClear={{model: clearGenerated, steps: clearStepDefs, page: ()=>setPageClassCode("")}}
+        feature={{code: featureCode, name:`${(javaClassName||'Generated').replace(/Model$/,'')}Feature.feature`}}
+        onClear={{model: clearGenerated, steps: clearStepDefs, page: ()=>setPageClassCode(""), feature: clearFeature}}
                 t={t}
                 downloadFile={downloadFile}
               />
@@ -899,6 +1015,33 @@ export default function App() {
       <div className="rounded-full bg-slate-900/90 text-slate-100 px-4 py-2 text-xs shadow-lg ring-1 ring-white/10 backdrop-blur flex items-center gap-2">
         <span>{toast.msg}</span>
         <button onClick={()=>setToast(null)} className="text-[10px] px-2 py-0.5 rounded-md bg-white/10 hover:bg-white/20">×</button>
+      </div>
+    </div>
+  )}
+  {showResetConfirm && (
+    <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/40">
+      <div className="w-[360px] rounded-lg bg-white dark:bg-slate-800 p-5 shadow-2xl space-y-4">
+        <div className="text-sm font-semibold">Tüm veriler silinsin mi?</div>
+        <p className="text-[11px] text-slate-600 dark:text-slate-300">Bu işlem geri alınamaz.</p>
+        <div className="flex justify-end gap-2 text-[11px]">
+          <button onClick={()=>setShowResetConfirm(false)} className={styles.secondaryBtn}>Vazgeç</button>
+          <button onClick={handleResetAll} className="inline-flex items-center gap-1 rounded-md bg-red-600 hover:bg-red-500 text-white px-3 py-2">Sil</button>
+        </div>
+      </div>
+    </div>
+  )}
+  {/* Confetti container removed */}
+  {showHelp && (
+    <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/40">
+      <div className="w-[520px] max-h-[80vh] overflow-auto rounded-lg bg-white dark:bg-slate-800 p-5 text-[11px] space-y-2 shadow-2xl">
+        <div className="flex justify-between items-center mb-2"><span className="text-sm font-semibold">Kısayollar & Özellikler</span><button onClick={()=>setShowHelp(false)} className={styles.secondaryBtn}>Kapat</button></div>
+        <ul className="list-disc pl-5 space-y-1">
+          <li>Ctrl+Shift+D: Tema değiştir</li>
+          <li>Ctrl+Shift+C: Hepsini kopyala</li>
+          <li>Ctrl+Shift+R: Reset</li>
+          <li>Ctrl+Enter: Steps üret</li>
+          <li>? : Bu pencere</li>
+        </ul>
       </div>
     </div>
   )}
