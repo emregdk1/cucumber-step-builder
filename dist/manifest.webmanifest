@@ -1,0 +1,16 @@
+{
+  "name": "Cucumber Step Builder",
+  "short_name": "StepBuilder",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#6366f1",
+  "icons": [
+    {
+      "src": "/favicon-alt.svg",
+      "sizes": "64x64 128x128 256x256",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

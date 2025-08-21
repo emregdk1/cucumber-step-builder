@@ -1,0 +1,57 @@
+<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256'>
+ <defs>
+  <!-- Purple background gradient (replaces previous gold) -->
+  <radialGradient id='gold' cx='30%' cy='25%' r='90%'>
+    <stop offset='0%' stop-color='#a855f7'/>
+    <stop offset='45%' stop-color='#7e22ce'/>
+    <stop offset='100%' stop-color='#4c1d95'/>
+  </radialGradient>
+  <radialGradient id='hot' cx='85%' cy='15%' r='120%'>
+    <stop offset='0%' stop-color='#ff8a5c' stop-opacity='0.8'/>
+    <stop offset='55%' stop-color='#f000b8' stop-opacity='0.0'/>
+  </radialGradient>
+  <!-- Multi layer C gradients (cool -> warm -> purple) -->
+  <linearGradient id='cLayer1' x1='0' y1='0' x2='1' y2='1'>
+    <stop offset='0%' stop-color='#4c1d95'/>
+    <stop offset='40%' stop-color='#6d28d9'/>
+    <stop offset='100%' stop-color='#7e22ce'/>
+  </linearGradient>
+  <linearGradient id='cLayer2' x1='1' y1='0' x2='0' y2='1'>
+    <stop offset='0%' stop-color='#9333ea'/>
+    <stop offset='50%' stop-color='#c084fc'/>
+    <stop offset='100%' stop-color='#f0abfc'/>
+  </linearGradient>
+  <linearGradient id='cLayer3' x1='0' y1='1' x2='1' y2='0'>
+    <stop offset='0%' stop-color='#f472b6'/>
+    <stop offset='50%' stop-color='#e879f9'/>
+    <stop offset='100%' stop-color='#818cf8'/>
+  </linearGradient>
+  <filter id='softShadow'>
+    <feDropShadow dx='0' dy='6' stdDeviation='10' flood-color='#000' flood-opacity='0.35'/>
+  </filter>
+  <filter id='cDepth'>
+    <feDropShadow dx='0' dy='2' stdDeviation='2' flood-color='#000' flood-opacity='0.35'/>
+    <feDropShadow dx='0' dy='4' stdDeviation='4' flood-color='#000' flood-opacity='0.25'/>
+  </filter>
+  <filter id='inner'>
+    <feGaussianBlur in='SourceGraphic' stdDeviation='2' result='b'/>
+    <feBlend in='SourceGraphic' in2='b' mode='screen'/>
+  </filter>
+ </defs>
+ <!-- Background Block -->
+ <rect x='16' y='16' width='224' height='224' rx='52' fill='url(#gold)' filter='url(#softShadow)'/>
+ <!-- Adjust hot overlay to cooler magenta glow for purple palette -->
+ <radialGradient id='hotPurple' cx='70%' cy='20%' r='120%'>
+   <stop offset='0%' stop-color='#c084fc' stop-opacity='0.85'/>
+   <stop offset='55%' stop-color='#7e22ce' stop-opacity='0.0'/>
+ </radialGradient>
+ <rect x='16' y='16' width='224' height='224' rx='52' fill='url(#hotPurple)' style='mix-blend-mode:overlay'/>
+ <!-- Layered C: three strokes with offsets to simulate 3D extrusion -->
+ <g filter='url(#cDepth)'>
+  <path d='M173 178q-21 19-46 19-34 0-55-24-21-25-17-60 4-34 31-57 26-22 61-18 28 3 50 21l-20 23q-15-13-33-15-23-3-40 11-18 14-21 37t12 41q13 17 34 17 21 0 39-16l6-6 23 19-6 7q-5 6-17 16z' fill='none' stroke='url(#cLayer1)' stroke-width='28' stroke-linecap='round' stroke-linejoin='round'/>
+  <path d='M173 178q-21 19-46 19-34 0-55-24-21-25-17-60 4-34 31-57 26-22 61-18 28 3 50 21l-20 23q-15-13-33-15-23-3-40 11-18 14-21 37t12 41q13 17 34 17 21 0 39-16l6-6 23 19-6 7q-5 6-17 16z' fill='none' stroke='url(#cLayer2)' stroke-width='18' stroke-linecap='round' stroke-linejoin='round' filter='url(#inner)'/>
+  <path d='M173 178q-21 19-46 19-34 0-55-24-21-25-17-60 4-34 31-57 26-22 61-18 28 3 50 21l-20 23q-15-13-33-15-23-3-40 11-18 14-21 37t12 41q13 17 34 17 21 0 39-16l6-6 23 19-6 7q-5 6-17 16z' fill='none' stroke='url(#cLayer3)' stroke-width='8' stroke-linecap='round' stroke-linejoin='round'/>
+ </g>
+ <!-- Accent spark -->
+ <circle cx='198' cy='60' r='16' fill='#f0abfc' opacity='.9' stroke='#ffffff' stroke-width='4'/>
+ </svg>
