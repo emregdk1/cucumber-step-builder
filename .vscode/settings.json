@@ -1,0 +1,19 @@
+{
+  "files.exclude": {
+    "dist": true
+  },
+  "search.exclude": {
+    "dist": true
+  },
+  "files.watcherExclude": {
+    "**/dist/**": true
+  },
+  "files.associations": {
+    "**/dist/index.html": "plaintext"
+  },
+  "html.validate.scripts": false,
+  "javascript.validate.enable": false,
+  "typescript.validate.enable": false,
+  "eslint.workingDirectories": ["./"],
+  "editor.maxTokenizationLineLength": 250000
+}

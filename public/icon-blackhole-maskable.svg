@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Maskable app icon: glowing ring" style="background:#020617">
+  <!-- Safe zone (circle ~ 80%) kept simple for mask shapes -->
+  <defs>
+    <radialGradient id="ringFill" cx="50%" cy="50%" r="50%">
+      <stop offset="55%" stop-color="#000"/>
+      <stop offset="62%" stop-color="#fcd34d"/>
+      <stop offset="72%" stop-color="#f59e0b"/>
+      <stop offset="82%" stop-color="#dc2626"/>
+      <stop offset="95%" stop-color="#020617" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="arc" x1="0%" y1="50%" x2="100%" y2="50%">
+      <stop offset="0%" stop-color="#fbbf24"/>
+      <stop offset="50%" stop-color="#f97316"/>
+      <stop offset="100%" stop-color="#ef4444"/>
+    </linearGradient>
+    <filter id="outerGlow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="8" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <!-- Background (solid so mask crops cleanly) -->
+  <rect width="512" height="512" fill="#020617"/>
+  <!-- Accretion ring ellipse kept within safe center (padding around edges) -->
+  <g transform="translate(256 256)" filter="url(#outerGlow)">
+    <ellipse rx="172" ry="88" fill="none" stroke="url(#arc)" stroke-width="40" stroke-linecap="round"/>
+    <circle r="80" fill="#020617" stroke="#0f172a" stroke-width="6"/>
+    <circle r="80" fill="url(#ringFill)" opacity="0.65"/>
+  </g>
+</svg>

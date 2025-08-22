@@ -16,14 +16,14 @@ const uuid = () => Math.random().toString(36).slice(2, 9);
 
 // Reusable style tokens (light + dark variants via tailwind dark: utilities)
 const styles = {
-  input: "w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-xs font-medium text-gray-800 shadow-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-400/40 transition disabled:bg-gray-100 disabled:text-gray-500 dark:border-slate-500 dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400 dark:focus:border-indigo-400 dark:focus:ring-indigo-500/40 dark:disabled:bg-slate-800 dark:disabled:text-slate-500",
-  select: "w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-xs font-medium text-gray-800 shadow-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-400/40 transition disabled:bg-gray-100 disabled:text-gray-500 dark:border-slate-500 dark:bg-slate-700 dark:text-slate-100 dark:focus:border-indigo-400 dark:focus:ring-indigo-500/40 dark:disabled:bg-slate-800 dark:disabled:text-slate-500",
-  primaryBtn: "inline-flex items-center gap-1 rounded-md bg-indigo-600 px-3 py-2 text-xs font-semibold text-white shadow-sm ring-1 ring-indigo-500/50 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-400 disabled:opacity-40 disabled:cursor-not-allowed transition dark:ring-indigo-400/50 dark:hover:bg-indigo-500",
-  secondaryBtn: "inline-flex items-center rounded-md border border-gray-300 bg-white px-2 py-1 text-[11px] font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-400 disabled:opacity-40 disabled:cursor-not-allowed transition dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600",
-  tinyBtn: "rounded-md border border-gray-300 bg-white px-2 py-1 text-[10px] font-medium text-gray-600 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-400 disabled:opacity-40 disabled:cursor-not-allowed transition dark:border-slate-600 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600",
-  codeLabel: "absolute left-3 top-2 rounded-md bg-indigo-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-indigo-600 backdrop-blur dark:bg-indigo-400/15 dark:text-indigo-300",
+  input: "w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-xs font-medium text-gray-800 shadow-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-400/40 transition disabled:bg-gray-100 disabled:text-gray-500 dark:border-slate-500 dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400 dark:focus:border-amber-400 dark:focus:ring-orange-500/40 dark:disabled:bg-slate-800 dark:disabled:text-slate-500",
+  select: "w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-xs font-medium text-gray-800 shadow-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-400/40 transition disabled:bg-gray-100 disabled:text-gray-500 dark:border-slate-500 dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400 dark:focus:border-amber-400 dark:focus:ring-orange-500/40 dark:disabled:bg-slate-800 dark:disabled:text-slate-500",
+  primaryBtn: "inline-flex items-center gap-1 rounded-md bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 px-3 py-2 text-xs font-semibold text-white shadow-sm ring-1 ring-orange-400/40 hover:brightness-110 focus:outline-none focus:ring-2 focus:ring-amber-300 disabled:opacity-40 disabled:cursor-not-allowed transition dark:ring-orange-400/40 dark:hover:brightness-125",
+  secondaryBtn: "inline-flex items-center rounded-md border border-gray-300 bg-white px-2 py-1 text-[11px] font-medium text-gray-700 shadow-sm hover:bg-amber-50 focus:outline-none focus:ring-2 focus:ring-amber-300 disabled:opacity-40 disabled:cursor-not-allowed transition dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600 dark:focus:ring-orange-400",
+  tinyBtn: "rounded-md border border-gray-300 bg-white px-2 py-1 text-[10px] font-medium text-gray-600 shadow-sm hover:bg-amber-50 focus:outline-none focus:ring-2 focus:ring-amber-300 disabled:opacity-40 disabled:cursor-not-allowed transition dark:border-slate-600 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600",
+  codeLabel: "absolute left-3 top-2 rounded-md bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-600 backdrop-blur dark:bg-orange-400/15 dark:text-orange-300",
   codeBtnsWrap: "absolute right-2 top-1 flex gap-1",
-  codeBtn: "rounded border border-white/20 bg-white/10 px-2 py-0.5 text-[10px] text-white backdrop-blur hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-indigo-400 transition dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/10"
+  codeBtn: "rounded border border-white/20 bg-white/10 px-2 py-0.5 text-[10px] text-white backdrop-blur hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-amber-400 transition dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/10"
 };
 
 // (Legacy step scenario generator removed)
@@ -53,9 +53,9 @@ function TabbedCode({ model, steps, page, feature, onClear, t, downloadFile }) {
     <div className="rounded-2xl border bg-slate-900/90 dark:border-slate-700 border-slate-800 shadow-inner">
       <div className="flex items-center gap-1 border-b border-slate-700/60 px-2 py-1 text-[11px] backdrop-blur-sm">
         {tabs.map(tb=> (
-          <button key={tb.key} onClick={()=>setActive(tb.key)} className={`relative px-3 py-1 rounded-md font-medium tracking-wide transition ${active===tb.key? 'bg-gradient-to-r from-indigo-600 to-fuchsia-600 text-white shadow ring-1 ring-indigo-400/50':'text-slate-300 hover:bg-slate-700'}`}>
+          <button key={tb.key} onClick={()=>setActive(tb.key)} className={`relative px-3 py-1 rounded-md font-medium tracking-wide transition ${active===tb.key? 'bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 text-white shadow ring-1 ring-orange-400/50':'text-slate-300 hover:bg-slate-700'}`}>
             {tb.label}
-            {active===tb.key && <span className="absolute left-0 right-0 -bottom-px h-[3px] bg-gradient-to-r from-indigo-400 to-fuchsia-500 rounded-t" />}
+            {active===tb.key && <span className="absolute left-0 right-0 -bottom-px h-[3px] bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 rounded-t opacity-80" />}
           </button>
         ))}
         <div className="ml-auto flex gap-1">
@@ -64,7 +64,7 @@ function TabbedCode({ model, steps, page, feature, onClear, t, downloadFile }) {
           <button className="rounded bg-red-500/70 px-2 py-0.5 text-[10px] text-white hover:bg-red-500" onClick={()=>clearMap[current.key]?.()}>{t('clear')}</button>
         </div>
       </div>
-  <pre className={`language-${current.lang||'java'} max-h-[480px] overflow-auto p-4 text-[11px] leading-5`}><code ref={codeRef} className={`language-${current.lang||'java'}`}>{code}</code></pre>
+      <pre className={`language-${current.lang||'java'} max-h-[480px] overflow-auto p-4 text-[11px] leading-5`}><code ref={codeRef} className={`language-${current.lang||'java'}`}>{code}</code></pre>
       <div className="flex justify-between items-center px-3 py-2 text-[10px] text-slate-400 bg-slate-800/60 border-t border-slate-700/50">
         <span>{fileName}</span>
         <span>{code.split('\n').length} lines</span>
@@ -104,7 +104,7 @@ export default function App() {
   const [stepDefsCode, setStepDefsCode] = useState('');
   const [featureCode, setFeatureCode] = useState('');
   const [dark, setDark] = useState(false);
-  // Removed: themeSyncSystem, tags, filter, diff, prevFeature
+  // Removed: brandTheme, themeSyncSystem, tags, filter, diff, prevFeature
   const [showHelp, setShowHelp] = useState(false);
   // Removed: bulk import modal, method list, multi-scenario
   const [toast, setToast] = useState(null); // {msg}
@@ -244,7 +244,7 @@ export default function App() {
       zip:'ZIP İndir', reset:'Reset',
   copyAll:'Hepsini Kopyala', export:'Dışa Aktar', import:'İçe Aktar', stats:'İstatistikler', duplicate:'Kopyala',
       // Section 1
-  section1Title:'Model, Steps, Page Steps & Locator Tanımları',
+  section1Title:'Model, Step Definitions, Page Steps, Feature & Locator Tanımları',
   elements:'Locators', addElement:'Locator ekle', generate:'Üret', delete:'Sil',
   elementGuideTitle:'Nasıl Kullanılır?',
   elementGuide1:'1) Locator Adı: Üzerinde işlem yapacağınız öğenin anlamlı bir adı (LOGIN_BUTTON, EMAIL_INPUT vb.).',
@@ -780,8 +780,30 @@ export default function App() {
       {showSplash && (
         <div className="splash-screen pointer-events-none fixed inset-0 z-[999] flex items-center justify-center bg-white dark:bg-[#050C18]">
           <div className="flex flex-col items-center gap-4 -translate-y-16 md:-translate-y-24">
-            <img src="favicon-alt.svg" alt="Logo" className="splash-logo h-24 w-24 drop-shadow-xl" />
-            <div className="text-xl font-bold tracking-tight bg-gradient-to-r from-indigo-500 via-fuchsia-500 to-pink-400 bg-clip-text text-transparent select-none">Cucumber Step Builder</div>
+            <div className="splash-logo-wrap splash-spin">
+              <span className="splash-orbit"></span>
+              <span className="splash-orbit o2"></span>
+              <span className="splash-orbit o3"></span>
+              {/* Step 8: Ripple burst rings */}
+              <span className="splash-ripple r1" aria-hidden="true"></span>
+              <span className="splash-ripple r2" aria-hidden="true"></span>
+              <span className="splash-ripple r3" aria-hidden="true"></span>
+              <div className="splash-ring" aria-hidden="true">
+                <svg viewBox="0 0 200 200" className="w-40 h-40">
+                  <defs>
+                    <linearGradient id="ringGrad" x1="0%" y1="50%" x2="100%" y2="50%">
+                      <stop offset="0%" stopColor="#fcd34d" />
+                      <stop offset="45%" stopColor="#f59e0b" />
+                      <stop offset="75%" stopColor="#f97316" />
+                      <stop offset="100%" stopColor="#dc2626" />
+                    </linearGradient>
+                  </defs>
+                  <circle cx="100" cy="100" r="82" style={{"--ring-circ":"515"}} />
+                </svg>
+              </div>
+              <img src="icon-blackhole.svg" alt="Logo" className="splash-logo h-24 w-24 drop-shadow-xl" />
+            </div>
+            <div className="text-xl font-bold tracking-tight bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 bg-clip-text text-transparent select-none">Cucumber Step Builder</div>
           </div>
         </div>
       )}
@@ -800,12 +822,12 @@ export default function App() {
       </div>
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <img src="favicon-alt.svg" alt="Logo" className="h-8 w-8 drop-shadow-md rounded-md ring-1 ring-indigo-500/40 bg-white/70 p-1" />
-          <h1 className="text-2xl font-bold tracking-tight bg-gradient-to-r from-indigo-500 via-fuchsia-500 to-pink-500 bg-clip-text text-transparent drop-shadow-sm">Cucumber Step Builder</h1>
+          <img src="icon-blackhole.svg" alt="Logo" className="h-8 w-8 drop-shadow-md rounded-md ring-1 ring-amber-500/40 bg-white/70 p-1 dark:bg-slate-800" />
+          <h1 className="text-2xl font-bold tracking-tight bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 bg-clip-text text-transparent drop-shadow-sm">Cucumber Step Builder</h1>
         </div>
         <div className="flex items-center flex-wrap gap-1">
           <button onClick={toggleLang} className="px-3 py-2 text-[11px] rounded-md bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600">{lang==='tr'?'EN':'TR'}</button>
-          <button onClick={handleDownloadAll} disabled={!fullJavaFile && !stepDefsCode && !pageClassCode} className="px-3 py-2 text-[11px] rounded-md bg-indigo-600 hover:bg-indigo-700 text-white disabled:opacity-40">⬇ {t('zip')}</button>
+          <button onClick={handleDownloadAll} disabled={!fullJavaFile && !stepDefsCode && !pageClassCode} className="px-3 py-2 text-[11px] rounded-md bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 text-white shadow-sm hover:brightness-110 disabled:opacity-40">⬇ {t('zip')}</button>
           <button onClick={handleCopyAll} disabled={!fullJavaFile && !stepDefsCode && !pageClassCode} className="px-3 py-2 text-[11px] rounded-md bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600">📋 {t('copyAll')}</button>
           <button onClick={handleExport} className="px-3 py-2 text-[11px] rounded-md bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600">💾 {t('export')}</button>
           <button onClick={handleImportClick} className="px-3 py-2 text-[11px] rounded-md bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600">📥 {t('import')}</button>
@@ -839,7 +861,7 @@ export default function App() {
             {t('noteGeneratedFromElements')}
           </div>
           <div className="mb-4">
-            <div className={`mb-2 text-xs font-semibold uppercase tracking-wide ${dark? 'text-indigo-300':'text-indigo-600'}`}>Java Class Ayarları</div>
+            <div className={`mb-2 text-xs font-semibold uppercase tracking-wide ${dark? 'text-amber-300':'text-amber-600'}`}>Java Class Ayarları</div>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
               {/* MODEL NAME */}
               <div className="md:col-span-1">
@@ -877,9 +899,9 @@ export default function App() {
             </div>
       {/* helper text moved directly under input above */}
           </div>
-          <div className={`mb-2 text-xs font-semibold uppercase tracking-wide ${dark? 'text-indigo-300':'text-indigo-600'}`}>{t('elements')}</div>
+          <div className={`mb-2 text-xs font-semibold uppercase tracking-wide ${dark? 'text-amber-300':'text-amber-600'}`}>{t('elements')}</div>
           <div className="mb-3">
-            <div className={`mb-1 text-[11px] font-semibold uppercase tracking-wide ${dark? 'text-indigo-300':'text-indigo-600'}`}>{t('elementGuideTitle')}</div>
+            <div className={`mb-1 text-[11px] font-semibold uppercase tracking-wide ${dark? 'text-amber-300':'text-amber-600'}`}>{t('elementGuideTitle')}</div>
             <ul className="list-disc pl-5 space-y-0.5 text-[11px] leading-snug">
               <li className={`${dark? 'text-gray-300':'text-gray-700'}`}>{t('elementGuide1')}</li>
               <li className={`${dark? 'text-gray-300':'text-gray-700'}`}>{t('elementGuide2')}</li>
@@ -895,7 +917,7 @@ export default function App() {
             {elements.length===0 && (
               <div className="rounded-md border border-dashed p-10 text-center text-[12px] text-slate-500 dark:border-slate-600 dark:text-slate-400">
                 <p className="mb-2 font-semibold">Başlamak için bir locator ekleyin</p>
-                <button onClick={addElement} className="inline-flex items-center gap-1 rounded-md bg-indigo-600 hover:bg-indigo-700 text-white text-xs px-4 py-2">➕ {t('addElement')}</button>
+                <button onClick={addElement} className="inline-flex items-center gap-1 rounded-md bg-amber-600 hover:bg-amber-700 text-white text-xs px-4 py-2">➕ {t('addElement')}</button>
               </div>
             )}
       {elements.map((el, idx) => {
@@ -907,7 +929,7 @@ export default function App() {
                     <label className={`mb-1 block text-[10px] font-semibold uppercase tracking-wide ${dark? 'text-gray-300':'text-gray-600'}`}>Locator Adı</label>
                     <input
                       className={styles.input + (dark? ' bg-slate-700 border-slate-500 text-slate-100 placeholder-slate-400':'')}
-                      placeholder="search button"
+                      placeholder="SEARCH_BUTTON"
                       value={el.alias}
                       onChange={(e) => updateElement(el.id, { alias: e.target.value })}
                     />
